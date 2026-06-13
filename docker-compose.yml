@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MATH_AGENT_API_URL=${MATH_AGENT_API_URL}
+      - MATH_AGENT_API_KEY=${MATH_AGENT_API_KEY}
+      - MATH_AGENT_MODEL_NAME=${MATH_AGENT_MODEL_NAME:-Intern-S1}
+      - MATH_AGENT_HOST=0.0.0.0
+      - MATH_AGENT_PORT=8000
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_logs:
