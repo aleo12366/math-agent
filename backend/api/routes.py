@@ -53,7 +53,6 @@ async def solve_problem(request: SolveRequest):
         pipeline = _create_pipeline(request.mode, request.debate_agents, event_bus)
 
         async def event_generator():
-            # Run pipeline in background
             import asyncio
             import json
 
@@ -66,42 +65,42 @@ async def solve_problem(request: SolveRequest):
                 except Exception as e:
                     result_container["error"] = str(e)
 
-            # Start pipeline task
             task = asyncio.create_task(run_pipeline())
-
-            # Stream events — race pipeline task against event queue
             queue = await event_bus.create_queue()
+
             try:
                 while True:
-                    # Get next event with timeout
-                    try:
-                        event = await asyncio.wait_for(queue.get(), timeout=5)
-                        yield event
-                    except asyncio.TimeoutError:
-                        # Send keepalive
-                        yield ": keepalive\n\n"
+                    event_task = asyncio.create_task(queue.get())
+                    done, pending = await asyncio.wait(
+                        {task, event_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
 
-                    # Check if pipeline is done and queue is drained
+                    for p in pending:
+                        p.cancel()
+
+                    if event_task in done:
+                        try:
+                            yield event_task.result()
+                        except asyncio.CancelledError:
+                            pass
+
                     if task.done():
-                        # Drain remaining events
-                        while not queue.empty():
-                            try:
-                                yield queue.get_nowait()
-                            except asyncio.QueueEmpty:
-                                break
                         break
-            except Exception:
-                pass
-            finally:
-                if not task.done():
-                    await task
 
-            # Send final result as a 'result' event
-            if result_container["result"]:
-                result_data = result_container["result"].model_dump(mode="json")
-                yield f"event: result\ndata: {json.dumps(result_data, ensure_ascii=False)}\n\n"
-            elif result_container["error"]:
-                yield f"event: error\ndata: {json.dumps({'error': result_container['error']})}\n\n"
+                if result_container["result"]:
+                    result_data = result_container["result"].model_dump(mode="json")
+                    yield f"event: result\ndata: {json.dumps(result_data, ensure_ascii=False)}\n\n"
+                elif result_container["error"]:
+                    yield f"event: error\ndata: {json.dumps({'error': result_container['error']})}\n\n"
+
+            except asyncio.CancelledError:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                raise
 
         return StreamingResponse(
             event_generator(),

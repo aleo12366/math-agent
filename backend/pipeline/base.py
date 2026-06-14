@@ -55,7 +55,18 @@ class BasePipeline(ABC):
 
     def _calc_progress(self, current_stage: int) -> int:
         """Calculate progress percentage for a given stage index."""
-        return int((current_stage / self.stages_total) * 100)
+        stage_progress = {
+            1: 10,   # understanding
+            2: 20,   # classification
+            3: 30,   # knowledge
+            4: 40,   # planning
+            5: 60,   # solving
+            6: 80,   # verification / reflection
+            7: 92,   # explanation
+            8: 100,  # formatting
+            9: 100,  # formatting complete
+        }
+        return stage_progress.get(current_stage, int((current_stage / self.stages_total) * 100))
 
     @abstractmethod
     async def solve(self, problem: str) -> MathAgentOutput:

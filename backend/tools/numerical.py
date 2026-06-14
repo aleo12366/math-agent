@@ -48,19 +48,21 @@ def scipy_optimize(method: str, func: str, constraints: dict = None, x0: list = 
             x0 = [0.0]
 
         if method == "minimize":
-            result = optimize.minimize(objective, x0, method="Nelder-Mead")
+            result = optimize.minimize(objective, x0, method="Nelder-Mead",
+                                       options={"maxiter": 300, "maxfev": 500})
             return ToolResult(
                 value=f"min={result.fun:.6f}, x={result.x.tolist()}",
                 numeric=float(result.fun),
             )
         elif method == "maximize":
-            result = optimize.minimize(lambda x: -objective(x), x0, method="Nelder-Mead")
+            result = optimize.minimize(lambda x: -objective(x), x0, method="Nelder-Mead",
+                                       options={"maxiter": 300, "maxfev": 500})
             return ToolResult(
                 value=f"max={-result.fun:.6f}, x={result.x.tolist()}",
                 numeric=float(-result.fun),
             )
         elif method == "root":
-            result = optimize.root(objective, x0)
+            result = optimize.root(objective, x0, options={"maxfev": 500})
             return ToolResult(
                 value=f"root={result.x.tolist()}, success={result.success}",
                 numeric=float(result.x[0]) if len(result.x) == 1 else None,
@@ -149,7 +151,7 @@ def scipy_integrate_quad(func: str, lower: float, upper: float) -> ToolResult:
         def integrand(x):
             return _safe_eval(func, {"x": x})
 
-        result, error = scipy_integrate.quad(integrand, lower, upper)
+        result, error = scipy_integrate.quad(integrand, lower, upper, limit=100)
         return ToolResult(
             value=f"result={result:.10f}, error={error:.2e}",
             numeric=float(result),
@@ -180,7 +182,8 @@ def scipy_solve_ode(func: str, y0: list, t_span: tuple, t_eval: list = None) -> 
         if t_eval is None:
             t_eval = np.linspace(t_span[0], t_span[1], 100).tolist()
 
-        sol = solve_ivp(ode_func, t_span, y0, t_eval=t_eval, method="RK45")
+        sol = solve_ivp(ode_func, t_span, y0, t_eval=t_eval, method="RK45",
+                        max_step=(t_span[1] - t_span[0]) / 50)
 
         if sol.success:
             # Return last value

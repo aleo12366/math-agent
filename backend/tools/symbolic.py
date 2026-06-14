@@ -22,12 +22,31 @@ TRANSFORMATIONS = standard_transformations + (
     convert_xor,
 )
 
+SAFE_LOCALS = {
+    "x": symbols("x"),
+    "y": symbols("y"),
+    "z": symbols("z"),
+    "n": symbols("n"),
+    "t": symbols("t"),
+    "sin": sin, "cos": cos, "tan": tan,
+    "log": log, "exp": exp, "sqrt": sqrt,
+    "pi": pi, "E": E, "I": I, "oo": oo,
+    "factorial": factorial, "binomial": binomial,
+    "Rational": Rational,
+}
+
 
 def _safe_parse(expr_str: str):
     """Safely parse a string expression into a SymPy expression."""
     if not expr_str or len(expr_str) > 1000:
         raise ValueError(f"expression too long ({len(expr_str)} chars)")
-    parsed = parse_expr(expr_str, transformations=TRANSFORMATIONS)
+    parsed = parse_expr(
+        expr_str,
+        transformations=TRANSFORMATIONS,
+        global_dict={"__builtins__": {}},
+        local_dict=SAFE_LOCALS,
+        evaluate=False,
+    )
     if sympy.count_ops(parsed) > 5000:
         raise ValueError("expression too complex")
     return parsed

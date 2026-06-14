@@ -207,9 +207,11 @@ class MultiPipeline(BasePipeline):
             all_outputs["consensus"] = consensus
 
             # Use the consensus-selected solver result as the main solving output
-            selected_idx = consensus.get("selected_agent", 0)
-            selected_idx = min(selected_idx, len(valid_results) - 1)
-            best_solution = valid_results[selected_idx]
+            selected_agent = consensus.get("selected_agent", 0)
+            best_solution = next(
+                (r for r in valid_results if r.get("_agent_id") == selected_agent),
+                valid_results[0],
+            )
 
             # Override final answer with consensus answer if available
             if consensus.get("consensus_answer"):
@@ -274,9 +276,11 @@ class MultiPipeline(BasePipeline):
                     all_outputs["consensus"] = consensus
                     all_outputs["all_solutions"] = valid_results
 
-                    selected_idx = consensus.get("selected_agent", 0)
-                    selected_idx = min(selected_idx, len(valid_results) - 1)
-                    best_solution = valid_results[selected_idx]
+                    selected_agent = consensus.get("selected_agent", 0)
+                    best_solution = next(
+                        (r for r in valid_results if r.get("_agent_id") == selected_agent),
+                        valid_results[0],
+                    )
 
                     if consensus.get("consensus_answer"):
                         best_solution["final_answer"] = consensus["consensus_answer"]

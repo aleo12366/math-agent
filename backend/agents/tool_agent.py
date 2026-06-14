@@ -127,30 +127,27 @@ class ToolAgent:
         Returns:
             Dict of tool parameters, or None if extraction fails.
         """
+        # Prefer structured tool_params from solver output
+        if isinstance(step.get("tool_params"), dict):
+            return step["tool_params"]
+
         expr = step.get("mathematical_expression", "")
-        description = step.get("description", "")
         tool_used = step.get("tool_used", "")
 
         if not expr:
             return None
 
-        # Clean LaTeX delimiters
         expr_clean = expr.replace("$", "").strip()
 
-        if tool_used == "simplify":
-            return {"expr": expr_clean}
-        elif tool_used == "solve":
-            return {"equation": expr_clean}
-        elif tool_used == "diff":
-            return {"expr": expr_clean}
-        elif tool_used == "integrate":
-            return {"expr": expr_clean}
-        elif tool_used == "limit":
-            return {"expr": expr_clean}
-        elif tool_used == "numerical_eval":
-            return {"expr": expr_clean}
-        else:
-            return {"expr": expr_clean}
+        defaults = {
+            "simplify": {"expr": expr_clean},
+            "solve": {"equation": expr_clean, "variable": "x"},
+            "diff": {"expr": expr_clean, "var": "x"},
+            "integrate": {"expr": expr_clean, "var": "x"},
+            "limit": {"expr": expr_clean, "var": "x", "point": "0"},
+            "numerical_eval": {"expr": expr_clean},
+        }
+        return defaults.get(tool_used, {"expr": expr_clean})
 
     def list_tools(self) -> list[str]:
         """List all available tool names.

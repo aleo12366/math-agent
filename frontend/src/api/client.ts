@@ -54,15 +54,24 @@ export function solveProblemSSE(
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
 
-        let currentEventType = '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          let currentEventType = '';
+          let dataLines: string[] = [];
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event: ')) {
+              currentEventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              dataLines.push(line.slice(6));
+            } else if (line.startsWith(':')) {
+              // keepalive comment, skip
+            }
+          }
+          if (dataLines.length > 0) {
+            const dataStr = dataLines.join('\n');
             try {
               const data = JSON.parse(dataStr);
               switch (currentEventType) {
