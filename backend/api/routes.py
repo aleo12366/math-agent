@@ -86,13 +86,22 @@ async def solve_problem(request: SolveRequest):
                             pass
 
                     if task.done():
+                        # Drain all remaining events from queue
+                        while not queue.empty():
+                            try:
+                                yield queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                break
                         break
 
-                if result_container["result"]:
+                # Send terminal event
+                if result_container["result"] is not None:
                     result_data = result_container["result"].model_dump(mode="json")
                     yield f"event: result\ndata: {json.dumps(result_data, ensure_ascii=False)}\n\n"
                 elif result_container["error"]:
                     yield f"event: error\ndata: {json.dumps({'error': result_container['error']})}\n\n"
+                else:
+                    yield f'event: error\ndata: {json.dumps({"error": "Pipeline returned no result"})}\n\n'
 
             except asyncio.CancelledError:
                 task.cancel()
@@ -254,9 +263,15 @@ async def update_config(request: ConfigUpdateRequest):
     # Separate API key from other fields (need special handling)
     new_api_key = update_data.pop("api_key", None)
 
-    # Update in-memory settings
+    # Update in-memory settings with validation
     for key, value in update_data.items():
         if hasattr(settings, key):
+            field = settings.model_fields.get(key)
+            if field and hasattr(field, 'annotation'):
+                try:
+                    value = field.annotation(value)
+                except (ValueError, TypeError):
+                    pass
             setattr(settings, key, value)
 
     # Update API key if provided

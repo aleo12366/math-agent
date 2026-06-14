@@ -188,6 +188,9 @@ class MultiPipeline(BasePipeline):
             valid_results = [
                 r for r in solver_results if isinstance(r, dict) and "final_answer" in r
             ]
+            failed_count = len(solver_results) - len(valid_results)
+            if failed_count:
+                logger.warning("%d/%d solvers failed on first pass", failed_count, len(solver_results))
             if not valid_results:
                 # All solvers failed - use first exception or empty
                 valid_results = [{"final_answer": "All solvers failed", "reasoning_steps": []}]
@@ -263,6 +266,12 @@ class MultiPipeline(BasePipeline):
                 ]
                 solver_results = await asyncio.gather(*solver_tasks, return_exceptions=True)
                 valid_results = [r for r in solver_results if isinstance(r, dict) and "final_answer" in r]
+                failed_count = len(solver_results) - len(valid_results)
+                if failed_count:
+                    logger.warning("Retry %d: %d/%d solvers failed", retry_count, failed_count, len(solver_results))
+                if not valid_results:
+                    logger.error("Retry %d: all solvers failed, stopping retries", retry_count)
+                    break
                 if valid_results:
                     # Re-run tool enrichment
                     for result in valid_results:

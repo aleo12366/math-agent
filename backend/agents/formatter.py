@@ -177,12 +177,23 @@ class Formatter:
             )
 
         # Build error logs
+        _MODULE_MAP = {
+            "understanding": ModuleName.PROBLEM_UNDERSTANDING,
+            "classification": ModuleName.CLASSIFIER,
+            "knowledge": ModuleName.KNOWLEDGE_LOCATOR,
+            "planning": ModuleName.PLANNER,
+            "solving": ModuleName.SOLVER,
+            "verification": ModuleName.VERIFIER,
+            "reflection": ModuleName.REFLECTION,
+            "explanation": ModuleName.EXPLAINER,
+            "formatting": ModuleName.FORMATTER,
+        }
         error_logs = []
         for key, output in all_outputs.items():
             if isinstance(output, dict) and "error" in output:
                 error_logs.append(ErrorLog(
                     timestamp=datetime.now(),
-                    module=ModuleName.PROBLEM_UNDERSTANDING,  # simplified
+                    module=_MODULE_MAP.get(key, ModuleName.FORMATTER),
                     error_type=ErrorType.LLM_ERROR,
                     message=str(output["error"]),
                 ))

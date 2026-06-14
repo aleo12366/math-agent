@@ -8,6 +8,7 @@ import VerificationPanel from './VerificationPanel';
 import ExplanationPanel from './ExplanationPanel';
 import JsonViewer from './JsonViewer';
 import LatexRenderer from './LatexRenderer';
+import { normalizeDelimiters } from '../utils/latexCleaner';
 
 interface SolutionDisplayProps {
   result: MathAgentOutput;
@@ -62,7 +63,7 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
           <p className="text-lg font-semibold text-gray-900">{result.final_answer}</p>
           {result.final_answer_latex && (
             <div className="mt-2">
-              <LatexRenderer latex={result.final_answer_latex.replace(/\$/g, '')} displayMode />
+              <LatexRenderer latex={normalizeDelimiters(result.final_answer_latex)} displayMode />
             </div>
           )}
         </div>
@@ -104,7 +105,7 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
             <p className="text-gray-800 text-lg mb-4">{result.final_answer}</p>
             {result.final_answer_latex && (
               <div className="p-4 bg-gray-50 rounded-lg text-center">
-                <LatexRenderer latex={result.final_answer_latex.replace(/\$/g, '')} displayMode />
+              <LatexRenderer latex={normalizeDelimiters(result.final_answer_latex)} displayMode />
               </div>
             )}
             {result.alternative_methods?.length > 0 && (

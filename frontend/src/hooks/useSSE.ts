@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { solveProblemSSE } from '../api/client';
 import { useSolveStore } from '../store/solveStore';
 import { useConfigStore } from '../store/configStore';
@@ -67,6 +67,13 @@ export function useSSE() {
     setIsSolving(false);
     setCurrentStage('cancelled');
   }, [setIsSolving, setCurrentStage]);
+
+  // Cleanup: abort on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   return { solve, cancel };
 }

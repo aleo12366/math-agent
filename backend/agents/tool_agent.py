@@ -146,6 +146,10 @@ class ToolAgent:
             "integrate": {"expr": expr_clean, "var": "x"},
             "limit": {"expr": expr_clean, "var": "x", "point": "0"},
             "numerical_eval": {"expr": expr_clean},
+            "verify_equality": {"expr1": expr_clean, "expr2": ""},
+            "optimize": {"method": "minimize", "func": expr_clean},
+            "quad": {"func": expr_clean, "lower": 0.0, "upper": 1.0},
+            "eval_np": {"expr": expr_clean},
         }
         return defaults.get(tool_used, {"expr": expr_clean})
 

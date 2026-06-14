@@ -1,5 +1,6 @@
 """SciPy/NumPy numerical operations for the tool agent."""
 
+import ast
 import logging
 import numpy as np
 from scipy import optimize, linalg, integrate as scipy_integrate
@@ -11,19 +12,33 @@ MAX_EXPR_LEN = 500
 
 _SAFE_GLOBALS = {
     "__builtins__": {},
-    "np": np,
     "sin": np.sin, "cos": np.cos, "tan": np.tan,
     "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
     "pi": np.pi, "e": np.e, "abs": np.abs,
     "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
     "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
+    "array": np.array, "linspace": np.linspace,
 }
+
+
+def _validate_expr(expr: str):
+    """Reject expressions with attribute access or other dangerous constructs."""
+    try:
+        tree = ast.parse(expr, mode="eval")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                raise ValueError("attribute access not allowed")
+            if isinstance(node, (ast.Call, ast.Import, ast.FunctionDef)):
+                raise ValueError("function calls not allowed")
+    except SyntaxError:
+        pass  # let eval() handle syntax errors
 
 
 def _safe_eval(expr: str, local_vars: dict = None):
     """Eval with sandboxed builtins and length limit."""
     if not expr or len(expr) > MAX_EXPR_LEN:
         raise ValueError(f"expression too long ({len(expr)} chars)")
+    _validate_expr(expr)
     return eval(expr, _SAFE_GLOBALS, local_vars or {})
 
 
@@ -211,16 +226,18 @@ def numerical_eval_np(expr: str, variables: dict = None) -> ToolResult:
         ToolResult with numerical result.
     """
     try:
-        ns = {"__builtins__": {}, "np": np, "sin": np.sin, "cos": np.cos, "tan": np.tan,
+        ns = {"__builtins__": {}, "sin": np.sin, "cos": np.cos, "tan": np.tan,
               "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
               "pi": np.pi, "e": np.e, "abs": np.abs,
               "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
-              "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh}
+              "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
+              "array": np.array}
         if variables:
             ns.update(variables)
 
         if not expr or len(expr) > MAX_EXPR_LEN:
             raise ValueError(f"expression too long ({len(expr)} chars)")
+        _validate_expr(expr)
         result = eval(expr, ns)
         result = float(np.asarray(result).flat[0])
 

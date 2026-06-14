@@ -121,8 +121,8 @@ def sympy_integrate(expr: str, var: str = "x", bounds: tuple = None) -> ToolResu
         parsed = _safe_parse(expr)
 
         if bounds:
-            lower = _safe_parse(str(bounds[0])) if bounds[0] else None
-            upper = _safe_parse(str(bounds[1])) if bounds[1] else None
+            lower = _safe_parse(str(bounds[0])) if bounds[0] is not None else None
+            upper = _safe_parse(str(bounds[1])) if bounds[1] is not None else None
             result = integrate(parsed, (x, lower, upper))
         else:
             result = integrate(parsed, x)

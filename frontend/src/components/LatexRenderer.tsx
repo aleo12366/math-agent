@@ -16,7 +16,6 @@ export default function LatexRenderer({ latex, displayMode = false, className = 
         katex.render(latex, containerRef.current, {
           displayMode,
           throwOnError: false,
-          trust: true,
           strict: false,
         });
       } catch {
