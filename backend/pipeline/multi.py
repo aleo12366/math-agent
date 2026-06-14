@@ -60,10 +60,9 @@ class MultiPipeline(BasePipeline):
         """
         solver = Solver()
         # Add slight variation to encourage diverse solutions
-        solver.config = Settings(
-            **{**self.config.__dict__,
-               "temperature": min(1.5, self.config.temperature + agent_id * 0.1)}
-        )
+        solver.config = self.config.model_copy(update={
+            "temperature": min(1.5, self.config.temperature + agent_id * 0.1)
+        })
         result = await solver.run({**context, "agent_id": agent_id})
         result["_agent_id"] = agent_id
         return result
@@ -263,8 +262,29 @@ class MultiPipeline(BasePipeline):
                 solver_results = await asyncio.gather(*solver_tasks, return_exceptions=True)
                 valid_results = [r for r in solver_results if isinstance(r, dict) and "final_answer" in r]
                 if valid_results:
-                    best_solution = valid_results[0]
+                    # Re-run tool enrichment
+                    for result in valid_results:
+                        if result.get("reasoning_steps"):
+                            result["reasoning_steps"] = await self.tool_agent.execute_from_solver_output(
+                                result["reasoning_steps"]
+                            )
+                    # Re-run consensus
+                    await self._emit_stage("consensus", "started", self._calc_progress(5))
+                    consensus = await self._run_consensus(problem, valid_results)
+                    all_outputs["consensus"] = consensus
+                    all_outputs["all_solutions"] = valid_results
+
+                    selected_idx = consensus.get("selected_agent", 0)
+                    selected_idx = min(selected_idx, len(valid_results) - 1)
+                    best_solution = valid_results[selected_idx]
+
+                    if consensus.get("consensus_answer"):
+                        best_solution["final_answer"] = consensus["consensus_answer"]
+                    if consensus.get("consensus_latex"):
+                        best_solution["final_answer_latex"] = consensus["consensus_latex"]
+
                     all_outputs["solving"] = best_solution
+                    await self._emit_stage("consensus", "complete", self._calc_progress(5))
                 await self._emit_stage("solving", "complete", self._calc_progress(5))
 
                 # Re-verify

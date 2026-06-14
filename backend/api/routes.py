@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -54,6 +55,7 @@ async def solve_problem(request: SolveRequest):
         async def event_generator():
             # Run pipeline in background
             import asyncio
+            import json
 
             result_container = {"result": None, "error": None}
 
@@ -67,27 +69,38 @@ async def solve_problem(request: SolveRequest):
             # Start pipeline task
             task = asyncio.create_task(run_pipeline())
 
-            # Stream events
-            async for event in event_bus.subscribe():
-                yield event
-
-                # Check if pipeline is done
-                if task.done():
-                    break
-
-            # Wait for task to complete
+            # Stream events — race pipeline task against event queue
+            queue = await event_bus.create_queue()
             try:
-                await task
+                while True:
+                    # Get next event with timeout
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=5)
+                        yield event
+                    except asyncio.TimeoutError:
+                        # Send keepalive
+                        yield ": keepalive\n\n"
+
+                    # Check if pipeline is done and queue is drained
+                    if task.done():
+                        # Drain remaining events
+                        while not queue.empty():
+                            try:
+                                yield queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                break
+                        break
             except Exception:
                 pass
+            finally:
+                if not task.done():
+                    await task
 
             # Send final result as a 'result' event
             if result_container["result"]:
-                import json
                 result_data = result_container["result"].model_dump(mode="json")
                 yield f"event: result\ndata: {json.dumps(result_data, ensure_ascii=False)}\n\n"
             elif result_container["error"]:
-                import json
                 yield f"event: error\ndata: {json.dumps({'error': result_container['error']})}\n\n"
 
         return StreamingResponse(
@@ -107,7 +120,7 @@ async def solve_problem(request: SolveRequest):
             return result
         except Exception as e:
             logger.error("Solve error: %s", e)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Solve failed. Check server logs.")
 
 
 @router.post("/batch")
@@ -115,11 +128,10 @@ async def solve_batch(request: BatchSolveRequest):
     """Solve a batch of math problems."""
     import asyncio
 
-    pipeline = _create_pipeline(request.mode, request.debate_agents)
-
     async def solve_one(problem: str):
         try:
-            return await pipeline.solve(problem)
+            p = _create_pipeline(request.mode, request.debate_agents)
+            return await p.solve(problem)
         except Exception as e:
             return {"error": str(e), "problem": problem}
 
@@ -182,7 +194,7 @@ def _save_env_file(updates: dict):
     env_updates: dict[str, str] = {}
     for field_name, env_key in env_keys.items():
         if field_name in updates:
-            env_updates[env_key] = str(updates[field_name])
+            env_updates[env_key] = str(updates[field_name].value if isinstance(updates[field_name], Enum) else updates[field_name])
 
     if not env_updates:
         return
@@ -238,7 +250,7 @@ async def get_config():
 @router.put("/config", response_model=ConfigResponse)
 async def update_config(request: ConfigUpdateRequest):
     """Update configuration and persist to .env file."""
-    update_data = request.model_dump(exclude_none=True)
+    update_data = request.model_dump(exclude_none=True, mode="json")
 
     # Separate API key from other fields (need special handling)
     new_api_key = update_data.pop("api_key", None)
@@ -307,7 +319,7 @@ async def test_api_connection():
         result["response_preview"] = response[:100]
     except Exception as e:
         result["status"] = "error"
-        result["error"] = str(e)
+        result["error"] = "Connection failed. Check URL, key, and server logs."
         logger.error("API test failed: %s", e)
 
     return result

@@ -44,6 +44,15 @@ class SinglePipeline(BasePipeline):
         self.explainer = Explainer()
         self.formatter = Formatter()
 
+    async def _solve_with_tools(self, context: dict) -> dict:
+        """Run solver then enrich with tool results."""
+        solving = await self.solver.run(context)
+        if solving.get("reasoning_steps"):
+            solving["reasoning_steps"] = await self.tool_agent.execute_from_solver_output(
+                solving["reasoning_steps"]
+            )
+        return solving
+
     async def solve(self, problem: str) -> MathAgentOutput:
         """Solve a math problem through the linear pipeline.
 
@@ -92,14 +101,9 @@ class SinglePipeline(BasePipeline):
 
             # Stage 5: Solving
             await self._emit_stage("solving", "started", self._calc_progress(5))
-            solving = await self.solver.run({
+            solving = await self._solve_with_tools({
                 **understanding, **classification, **planning, **knowledge,
             })
-            # Enrich with tool results
-            if solving.get("reasoning_steps"):
-                solving["reasoning_steps"] = await self.tool_agent.execute_from_solver_output(
-                    solving["reasoning_steps"]
-                )
             all_outputs["solving"] = solving
 
             # Emit step events for each reasoning step
@@ -149,7 +153,7 @@ class SinglePipeline(BasePipeline):
                 all_outputs["_retry_count"] = retry_count
 
                 await self._emit_stage("solving", "started", self._calc_progress(5))
-                solving = await self.solver.run({
+                solving = await self._solve_with_tools({
                     **understanding, **classification, **planning, **knowledge,
                     "correction_hints": reflection_result.get("correction_strategy", {}),
                 })

@@ -7,6 +7,25 @@ from config.schemas import ToolResult
 
 logger = logging.getLogger(__name__)
 
+MAX_EXPR_LEN = 500
+
+_SAFE_GLOBALS = {
+    "__builtins__": {},
+    "np": np,
+    "sin": np.sin, "cos": np.cos, "tan": np.tan,
+    "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
+    "pi": np.pi, "e": np.e, "abs": np.abs,
+    "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
+    "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
+}
+
+
+def _safe_eval(expr: str, local_vars: dict = None):
+    """Eval with sandboxed builtins and length limit."""
+    if not expr or len(expr) > MAX_EXPR_LEN:
+        raise ValueError(f"expression too long ({len(expr)} chars)")
+    return eval(expr, _SAFE_GLOBALS, local_vars or {})
+
 
 def scipy_optimize(method: str, func: str, constraints: dict = None, x0: list = None) -> ToolResult:
     """Perform numerical optimization.
@@ -23,9 +42,7 @@ def scipy_optimize(method: str, func: str, constraints: dict = None, x0: list = 
     try:
         # Parse the function
         def objective(x):
-            return eval(func, {"x": x, "np": np, "sin": np.sin, "cos": np.cos,
-                               "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
-                               "tan": np.tan, "pi": np.pi, "e": np.e})
+            return _safe_eval(func, {"x": x})
 
         if x0 is None:
             x0 = [0.0]
@@ -130,9 +147,7 @@ def scipy_integrate_quad(func: str, lower: float, upper: float) -> ToolResult:
     """
     try:
         def integrand(x):
-            return eval(func, {"x": x, "np": np, "sin": np.sin, "cos": np.cos,
-                               "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
-                               "tan": np.tan, "pi": np.pi, "e": np.e})
+            return _safe_eval(func, {"x": x})
 
         result, error = scipy_integrate.quad(integrand, lower, upper)
         return ToolResult(
@@ -160,9 +175,7 @@ def scipy_solve_ode(func: str, y0: list, t_span: tuple, t_eval: list = None) -> 
         from scipy.integrate import solve_ivp
 
         def ode_func(t, y):
-            return eval(func, {"t": t, "y": y, "np": np, "sin": np.sin,
-                               "cos": np.cos, "exp": np.exp, "log": np.log,
-                               "sqrt": np.sqrt, "pi": np.pi, "e": np.e})
+            return _safe_eval(func, {"t": t, "y": y})
 
         if t_eval is None:
             t_eval = np.linspace(t_span[0], t_span[1], 100).tolist()
@@ -195,16 +208,16 @@ def numerical_eval_np(expr: str, variables: dict = None) -> ToolResult:
         ToolResult with numerical result.
     """
     try:
-        ns = {
-            "np": np, "sin": np.sin, "cos": np.cos, "tan": np.tan,
-            "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
-            "pi": np.pi, "e": np.e, "abs": np.abs,
-            "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
-            "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
-        }
+        ns = {"__builtins__": {}, "np": np, "sin": np.sin, "cos": np.cos, "tan": np.tan,
+              "exp": np.exp, "log": np.log, "sqrt": np.sqrt,
+              "pi": np.pi, "e": np.e, "abs": np.abs,
+              "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
+              "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh}
         if variables:
             ns.update(variables)
 
+        if not expr or len(expr) > MAX_EXPR_LEN:
+            raise ValueError(f"expression too long ({len(expr)} chars)")
         result = eval(expr, ns)
         result = float(np.asarray(result).flat[0])
 

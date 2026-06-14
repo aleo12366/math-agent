@@ -29,7 +29,11 @@ class Reflection(BaseAgent):
         """
         problem = input_data.get("cleaned_problem") or input_data.get("problem", "")
         reasoning_steps = input_data.get("reasoning_steps", [])
-        verification_details = input_data.get("verification_details", {})
+        verification_details = (
+            input_data.get("verification_details")
+            or input_data.get("details")
+            or {}
+        )
         issues_found = input_data.get("issues_found", [])
 
         # Format reasoning steps

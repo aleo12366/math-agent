@@ -25,10 +25,7 @@ class EventBus:
         Yields:
             SSE-formatted event strings.
         """
-        queue: asyncio.Queue = asyncio.Queue()
-
-        async with self._lock:
-            self._subscribers.append(queue)
+        queue = await self.create_queue()
 
         try:
             while True:
@@ -44,6 +41,13 @@ class EventBus:
             async with self._lock:
                 if queue in self._subscribers:
                     self._subscribers.remove(queue)
+
+    async def create_queue(self) -> asyncio.Queue:
+        """Create and register a new subscriber queue."""
+        queue: asyncio.Queue = asyncio.Queue()
+        async with self._lock:
+            self._subscribers.append(queue)
+        return queue
 
     async def emit(self, event_type: str, data: dict):
         """Emit an SSE event to all subscribers.

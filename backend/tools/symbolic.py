@@ -25,10 +25,12 @@ TRANSFORMATIONS = standard_transformations + (
 
 def _safe_parse(expr_str: str):
     """Safely parse a string expression into a SymPy expression."""
-    try:
-        return parse_expr(expr_str, transformations=TRANSFORMATIONS)
-    except Exception:
-        return sympy.sympify(expr_str)
+    if not expr_str or len(expr_str) > 1000:
+        raise ValueError(f"expression too long ({len(expr_str)} chars)")
+    parsed = parse_expr(expr_str, transformations=TRANSFORMATIONS)
+    if sympy.count_ops(parsed) > 5000:
+        raise ValueError("expression too complex")
+    return parsed
 
 
 def sympy_simplify(expr: str) -> ToolResult:

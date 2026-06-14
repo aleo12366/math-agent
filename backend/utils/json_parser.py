@@ -129,8 +129,8 @@ def _try_fix_json(text: str) -> Optional[dict]:
     fixes = [
         # Remove trailing commas before } or ]
         (re.sub(r",\s*([\]}])", r"\1", text), "trailing comma fix"),
-        # Replace single quotes with double quotes (rough)
-        (text.replace("'", '"'), "single quote fix"),
+        # Fix single-quoted JSON keys only (not values)
+        (re.sub(r"(?<!\\)'([A-Za-z_][A-Za-z0-9_]*)'\s*:", r'"\1":', text), "single quote key fix"),
         # Add missing closing braces
         (text + "}" * (text.count("{") - text.count("}")), "missing brace fix"),
     ]

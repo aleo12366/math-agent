@@ -252,7 +252,7 @@ class ConfigUpdateRequest(BaseModel):
     model_name: Optional[str] = None
     temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(default=None, ge=1, le=32768)
-    pipeline_mode: Optional[str] = None
+    pipeline_mode: Optional[PipelineMode] = None
     debate_agents: Optional[int] = Field(default=None, ge=1, le=10)
     max_retries: Optional[int] = Field(default=None, ge=0, le=10)
     verification_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)

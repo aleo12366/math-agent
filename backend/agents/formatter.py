@@ -38,7 +38,7 @@ class Formatter:
     def __init__(self):
         self.name = "formatter"
 
-    def format(self, all_outputs: dict) -> MathAgentOutput:
+    def format(self, all_outputs: dict, model_name: str = "Intern-S1") -> MathAgentOutput:
         """Assemble all module outputs into the unified MathAgentOutput.
 
         Args:
@@ -109,10 +109,8 @@ class Formatter:
                         tools_needed=step.get("tools_needed", []),
                         knowledge_applied=step.get("knowledge_applied"),
                     ))
-                except Exception:
-                    pass
-
-        # Build KeyStep list
+                except Exception as e:
+                    logger.warning("Invalid plan step skipped: %s", e)
         key_steps = []
         for step in solving.get("reasoning_steps", []):
             if isinstance(step, dict):
@@ -142,10 +140,8 @@ class Formatter:
                         tool_result=tool_result,
                         status=status,
                     ))
-                except Exception:
-                    pass
-
-        # Build VerificationDetails
+                except Exception as e:
+                    logger.warning("Invalid key step skipped: %s", e)
         vdetails = verification.get("details", {})
         def _make_check(name: str) -> VerificationCheck:
             check = vdetails.get(name, {})
@@ -199,7 +195,7 @@ class Formatter:
             mode = PipelineMode.SINGLE
 
         metadata = PipelineMetadata(
-            model="Intern-S1",
+            model=model_name,
             mode=mode,
             debate_agents=all_outputs.get("_debate_agents", 1),
             retry_count=all_outputs.get("_retry_count", 0),

@@ -131,9 +131,8 @@ class LLMClient:
                 ) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        raise Exception(
-                            f"LLM API error {resp.status}: {body} | URL: {url}"
-                        )
+                        logger.error("LLM API error %s: %s", resp.status, body[:1000])
+                        raise RuntimeError(f"LLM API error {resp.status}")
 
                     data = await resp.json()
                     content = data["choices"][0]["message"]["content"]
@@ -186,9 +185,8 @@ class LLMClient:
                 ) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        raise Exception(
-                            f"LLM API stream error {resp.status}: {body} | URL: {url}"
-                        )
+                        logger.error("LLM API stream error %s: %s", resp.status, body[:1000])
+                        raise RuntimeError(f"LLM API error {resp.status}")
 
                     async for line in resp.content:
                         line_str = line.decode("utf-8").strip()
