@@ -38,6 +38,7 @@ export const useSolveStore = create<SolveStore>()(
       clearHistory: () => set({ history: [] }),
       reset: () =>
         set({
+          problem: '',
           isSolving: false,
           result: null,
           progress: 0,

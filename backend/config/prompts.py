@@ -1,5 +1,7 @@
 """Prompt templates for all agents in the math problem-solving pipeline."""
 
+import logging
+
 # ============================================================
 # Module 1: Problem Understanding
 # ============================================================
@@ -176,7 +178,7 @@ SOLVER_USER = """请按照以下解题计划求解数学问题：
         {{
             "step_id": 1,
             "description": "步骤描述",
-            "mathematicative_expression": "$LaTeX表达式$",
+            "mathematical_expression": "$LaTeX表达式$",
             "justification": "推理依据（引用定理/公式）",
             "result": "该步骤的结果",
             "tool_used": "使用的工具（如有）",
@@ -428,4 +430,5 @@ def format_prompt(template: str, **kwargs) -> str:
     try:
         return template.format(**kwargs)
     except KeyError as e:
-        return template  # Return unformatted if missing keys
+        logging.getLogger(__name__).warning("format_prompt missing key %s", e)
+        return template

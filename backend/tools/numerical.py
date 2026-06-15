@@ -19,19 +19,18 @@ _SAFE_GLOBALS = {
     "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
     "array": np.array, "linspace": np.linspace,
 }
+_SAFE_NAMES = set(_SAFE_GLOBALS.keys())
 
 
 def _validate_expr(expr: str):
-    """Reject expressions with attribute access or other dangerous constructs."""
+    """Reject expressions with attribute access (prevents sandbox escape)."""
     try:
         tree = ast.parse(expr, mode="eval")
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute):
                 raise ValueError("attribute access not allowed")
-            if isinstance(node, (ast.Call, ast.Import, ast.FunctionDef)):
-                raise ValueError("function calls not allowed")
     except SyntaxError:
-        pass  # let eval() handle syntax errors
+        raise ValueError("invalid expression syntax")
 
 
 def _safe_eval(expr: str, local_vars: dict = None):
@@ -232,13 +231,12 @@ def numerical_eval_np(expr: str, variables: dict = None) -> ToolResult:
               "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
               "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
               "array": np.array}
-        if variables:
-            ns.update(variables)
 
         if not expr or len(expr) > MAX_EXPR_LEN:
             raise ValueError(f"expression too long ({len(expr)} chars)")
         _validate_expr(expr)
-        result = eval(expr, ns)
+        # Pass variables as locals (cannot override __builtins__ in globals)
+        result = eval(expr, ns, variables or {})
         result = float(np.asarray(result).flat[0])
 
         return ToolResult(

@@ -32,7 +32,7 @@ class Explainer(BaseAgent):
         difficulty = input_data.get("difficulty", "medium")
         reasoning_steps = input_data.get("reasoning_steps", [])
         final_answer = input_data.get("final_answer", "")
-        theorems_applied = input_data.get("theorems_applied", [])
+        theorems_applied = input_data.get("relevant_theorems") or input_data.get("theorems_applied", [])
         knowledge_points = input_data.get("knowledge_points", [])
 
         # Format reasoning steps

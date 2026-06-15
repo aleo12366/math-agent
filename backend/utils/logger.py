@@ -69,14 +69,6 @@ class StructuredLogger:
         log_func = getattr(self.logger, level.lower(), self.logger.info)
         log_func(msg)
 
-        # Also write to file if configured
-        if self.log_file:
-            try:
-                with open(self.log_file, "a", encoding="utf-8") as f:
-                    f.write(msg + "\n")
-            except Exception:
-                pass
-
     def pipeline_start(self, problem: str, mode: str, **kwargs):
         """Log pipeline start event."""
         self._write_entry("INFO", "pipeline_start", problem=problem[:200], mode=mode, **kwargs)

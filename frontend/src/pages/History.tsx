@@ -4,9 +4,10 @@ import { DomainBadge, ProblemTypeBadge, VerificationBadge } from '../components/
 import type { MathAgentOutput } from '../types';
 
 export default function HistoryPage() {
-  const { history, setResult, clearHistory } = useSolveStore();
+  const { history, setResult, clearHistory, reset } = useSolveStore();
 
   const handleSelect = (item: MathAgentOutput) => {
+    reset();
     setResult(item);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

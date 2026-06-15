@@ -62,6 +62,8 @@ class ToolAgent:
         Returns:
             ToolResult with the computation result.
         """
+        import asyncio
+
         if tool_name not in TOOL_REGISTRY:
             self.logger.warning("Unknown tool: %s", tool_name)
             return ToolResult(value=f"Unknown tool: {tool_name}")
@@ -69,8 +71,8 @@ class ToolAgent:
         func = TOOL_REGISTRY[tool_name]
 
         try:
-            # Filter params to match function signature
-            result = func(**params)
+            # Run blocking SymPy/SciPy in thread pool to avoid freezing event loop
+            result = await asyncio.to_thread(func, **params)
             self.logger.debug("Tool %s(%s) = %s", tool_name, params, result.value)
             return result
 
@@ -80,7 +82,7 @@ class ToolAgent:
             try:
                 # Try with just the first param
                 first_key = next(iter(params))
-                result = func(params[first_key])
+                result = await asyncio.to_thread(func, params[first_key])
                 return result
             except Exception as inner_e:
                 self.logger.error("Tool %s retry failed: %s", tool_name, inner_e)

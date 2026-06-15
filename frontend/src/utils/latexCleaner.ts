@@ -18,7 +18,8 @@ export function cleanLatex(text: string): string {
 /**
  * Normalize delimiters: \[ \] → $$, \( \) → $
  */
-export function normalizeDelimiters(text: string): string {
+export function normalizeDelimiters(text: string | undefined): string {
+  if (!text) return '';
   let result = text;
   // \[ ... \] → $$ ... $$
   result = result.replace(/\\\[/g, '$$');
@@ -55,13 +56,7 @@ export function fixCommonErrors(text: string): string {
  */
 export function removeUnsupportedCommands(text: string): string {
   let result = text;
-  // Common unsupported commands
-  const unsupported = [
-    [/\\boxed\{/g, '\\fbox{'], // \boxed → \fbox (not great but fallback)
-  ];
-  for (const [pattern, replacement] of unsupported) {
-    result = result.replace(pattern as RegExp, replacement as string);
-  }
+  // \boxed is supported by KaTeX natively — no replacement needed
   return result;
 }
 

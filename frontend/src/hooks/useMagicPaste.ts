@@ -5,7 +5,7 @@ import type { ContentType } from '../types';
 /**
  * Hook for smart paste detection (Mogan-inspired Magic Paste).
  */
-export function useMagicPaste(textareaRef: RefObject<HTMLTextAreaElement | null>) {
+export function useMagicPaste() {
   const [detectedType, setDetectedType] = useState<ContentType>('plain');
 
   const handlePaste = useCallback(

@@ -79,7 +79,7 @@ function App() {
         {/* Footer */}
         <footer className="bg-white border-t border-gray-200 py-4">
           <div className="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
-            Math Agent System v2.0 · Powered by Intern-S1 · Multi-Agent Pipeline
+            Math Agent System v2.0 · Powered by Intern-S Series · Multi-Agent Pipeline
           </div>
         </footer>
       </div>

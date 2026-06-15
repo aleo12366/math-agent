@@ -1,6 +1,7 @@
 import { ArrowRight, Wrench } from 'lucide-react';
 import type { KeyStep, PlanStep } from '../types';
 import LatexRenderer from './LatexRenderer';
+import { normalizeDelimiters } from '../utils/latexCleaner';
 
 interface ReasoningStepsProps {
   steps: KeyStep[];
@@ -58,7 +59,7 @@ export default function ReasoningSteps({ steps, plan }: ReasoningStepsProps) {
 
               {step.mathematical_expression && (
                 <div className="ml-8 my-2 p-3 bg-gray-50 rounded-lg">
-                  <LatexRenderer latex={step.mathematical_expression.replace(/\$/g, '')} displayMode />
+                  <LatexRenderer latex={normalizeDelimiters(step.mathematical_expression)} displayMode />
                 </div>
               )}
 

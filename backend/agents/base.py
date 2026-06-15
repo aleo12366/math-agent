@@ -18,6 +18,8 @@ class BaseAgent(ABC):
     Subclasses must implement the `run` method.
     """
 
+    _shared_llm = None  # Set by ReasoningAgent to inject competition client
+
     def __init__(self, name: str, config: Optional[Settings] = None):
         """Initialize the agent.
 
@@ -27,7 +29,7 @@ class BaseAgent(ABC):
         """
         self.name = name
         self.config = config or settings
-        self.llm = llm_client
+        self.llm = BaseAgent._shared_llm or llm_client
         self.logger = logging.getLogger(f"agent.{name}")
 
     async def call_llm(

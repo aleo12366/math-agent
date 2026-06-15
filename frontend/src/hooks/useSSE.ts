@@ -52,6 +52,7 @@ export function useSSE() {
           addToHistory(result);
           setIsSolving(false);
           setCurrentStage('complete');
+          setError(null); // Clear any error from onComplete
         },
         onError: (error: string) => {
           setError(error);

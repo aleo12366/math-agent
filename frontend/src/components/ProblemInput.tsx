@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, StopCircle } from 'lucide-react';
 import { useSolveStore } from '../store/solveStore';
 import { useConfigStore } from '../store/configStore';
@@ -10,8 +10,13 @@ export default function ProblemInput() {
   const { problem, isSolving, setProblem } = useSolveStore();
   const { mode, debateAgents } = useConfigStore();
   const { solve, cancel } = useSSE();
-  const { handlePaste, detectedType } = useMagicPaste(textareaRef);
-  const [localProblem, setLocalProblem] = useState('');
+  const { handlePaste, detectedType } = useMagicPaste();
+  const [localProblem, setLocalProblem] = useState(problem);
+
+  // Sync local state when store problem changes (e.g. after reset)
+  useEffect(() => {
+    setLocalProblem(problem);
+  }, [problem]);
 
   const handleSubmit = () => {
     const text = localProblem.trim() || problem;

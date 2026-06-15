@@ -14,7 +14,7 @@ export default function Home() {
           数学智能体推理系统
         </h1>
         <p className="text-gray-500 max-w-2xl mx-auto">
-          基于 Intern-S1 的多智能体数学推理管线 · 9步流水线 · 6维验证 · 辩论共识
+          基于 Intern-S 系列的多智能体数学推理管线 · 9步流水线 · 6维验证 · 辩论共识
         </p>
       </div>
 

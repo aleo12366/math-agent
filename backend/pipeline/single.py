@@ -18,7 +18,6 @@ from agents.tool_agent import ToolAgent
 from agents.verifier import Verifier
 from agents.reflection import Reflection
 from agents.explainer import Explainer
-from agents.formatter import Formatter
 from utils.logger import logger as structured_logger
 
 logger = logging.getLogger(__name__)
@@ -42,7 +41,6 @@ class SinglePipeline(BasePipeline):
         self.verifier = Verifier()
         self.reflection = Reflection()
         self.explainer = Explainer()
-        self.formatter = Formatter()
 
     async def _solve_with_tools(self, context: dict) -> dict:
         """Run solver then enrich with tool results."""

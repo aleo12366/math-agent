@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, RotateCcw, Eye, EyeOff, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Eye, EyeOff, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useConfigStore } from '../store/configStore';
 import { getConfig, updateConfig } from '../api/client';
 import type { PipelineMode, ConfigResponse } from '../types';

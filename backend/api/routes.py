@@ -62,6 +62,8 @@ async def solve_problem(request: SolveRequest):
                 try:
                     result = await pipeline.solve(request.problem)
                     result_container["result"] = result
+                except asyncio.CancelledError:
+                    result_container["error"] = "cancelled"
                 except Exception as e:
                     result_container["error"] = str(e)
 
@@ -70,28 +72,21 @@ async def solve_problem(request: SolveRequest):
 
             try:
                 while True:
-                    event_task = asyncio.create_task(queue.get())
-                    done, pending = await asyncio.wait(
-                        {task, event_task},
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-
-                    for p in pending:
-                        p.cancel()
-
-                    if event_task in done:
-                        try:
-                            yield event_task.result()
-                        except asyncio.CancelledError:
-                            pass
-
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=1)
+                        yield event
+                    except asyncio.TimeoutError:
+                        if task.done():
+                            break
+                        continue
                     if task.done():
-                        # Drain all remaining events from queue
-                        while not queue.empty():
-                            try:
-                                yield queue.get_nowait()
-                            except asyncio.QueueEmpty:
-                                break
+                        break
+
+                # Drain remaining events
+                while not queue.empty():
+                    try:
+                        yield queue.get_nowait()
+                    except asyncio.QueueEmpty:
                         break
 
                 # Send terminal event
@@ -110,6 +105,11 @@ async def solve_problem(request: SolveRequest):
                 except (asyncio.CancelledError, Exception):
                     pass
                 raise
+            finally:
+                # Bug #3 fix: cleanup subscriber queue
+                async with event_bus._lock:
+                    if queue in event_bus._subscribers:
+                        event_bus._subscribers.remove(queue)
 
         return StreamingResponse(
             event_generator(),
@@ -271,7 +271,8 @@ async def update_config(request: ConfigUpdateRequest):
                 try:
                     value = field.annotation(value)
                 except (ValueError, TypeError):
-                    pass
+                    logger.warning("Invalid value for %s: %s, skipping", key, value)
+                    continue
             setattr(settings, key, value)
 
     # Update API key if provided

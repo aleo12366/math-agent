@@ -18,7 +18,6 @@ from agents.tool_agent import ToolAgent
 from agents.verifier import Verifier
 from agents.reflection import Reflection
 from agents.explainer import Explainer
-from agents.formatter import Formatter
 from config.prompts import CONSENSUS_SYSTEM, CONSENSUS_USER, format_prompt
 from utils.llm_client import llm_client
 from utils.json_parser import extract_json_from_text
@@ -44,7 +43,6 @@ class MultiPipeline(BasePipeline):
         self.verifier = Verifier()
         self.reflection = Reflection()
         self.explainer = Explainer()
-        self.formatter = Formatter()
         self.n_agents = config.debate_agents if config else settings.debate_agents
 
     async def _run_solver(self, agent_id: int, problem: str, context: dict) -> dict:
@@ -259,9 +257,9 @@ class MultiPipeline(BasePipeline):
 
                 # Re-run parallel solvers with correction hints
                 await self._emit_stage("solving", "started", self._calc_progress(5))
-                context["correction_hints"] = reflection_result.get("correction_strategy", {})
+                retry_context = {**context, "correction_hints": reflection_result.get("correction_strategy", {})}
                 solver_tasks = [
-                    self._run_solver(i, problem, context)
+                    self._run_solver(i, problem, retry_context)
                     for i in range(self.n_agents)
                 ]
                 solver_results = await asyncio.gather(*solver_tasks, return_exceptions=True)
@@ -272,32 +270,31 @@ class MultiPipeline(BasePipeline):
                 if not valid_results:
                     logger.error("Retry %d: all solvers failed, stopping retries", retry_count)
                     break
-                if valid_results:
-                    # Re-run tool enrichment
-                    for result in valid_results:
-                        if result.get("reasoning_steps"):
-                            result["reasoning_steps"] = await self.tool_agent.execute_from_solver_output(
-                                result["reasoning_steps"]
-                            )
-                    # Re-run consensus
-                    await self._emit_stage("consensus", "started", self._calc_progress(5))
-                    consensus = await self._run_consensus(problem, valid_results)
-                    all_outputs["consensus"] = consensus
-                    all_outputs["all_solutions"] = valid_results
+                # Re-run tool enrichment
+                for result in valid_results:
+                    if result.get("reasoning_steps"):
+                        result["reasoning_steps"] = await self.tool_agent.execute_from_solver_output(
+                            result["reasoning_steps"]
+                        )
+                # Re-run consensus
+                await self._emit_stage("consensus", "started", self._calc_progress(5))
+                consensus = await self._run_consensus(problem, valid_results)
+                all_outputs["consensus"] = consensus
+                all_outputs["all_solutions"] = valid_results
 
-                    selected_agent = consensus.get("selected_agent", 0)
-                    best_solution = next(
-                        (r for r in valid_results if r.get("_agent_id") == selected_agent),
-                        valid_results[0],
-                    )
+                selected_agent = consensus.get("selected_agent", 0)
+                best_solution = next(
+                    (r for r in valid_results if r.get("_agent_id") == selected_agent),
+                    valid_results[0],
+                )
 
-                    if consensus.get("consensus_answer"):
-                        best_solution["final_answer"] = consensus["consensus_answer"]
-                    if consensus.get("consensus_latex"):
-                        best_solution["final_answer_latex"] = consensus["consensus_latex"]
+                if consensus.get("consensus_answer"):
+                    best_solution["final_answer"] = consensus["consensus_answer"]
+                if consensus.get("consensus_latex"):
+                    best_solution["final_answer_latex"] = consensus["consensus_latex"]
 
-                    all_outputs["solving"] = best_solution
-                    await self._emit_stage("consensus", "complete", self._calc_progress(5))
+                all_outputs["solving"] = best_solution
+                await self._emit_stage("consensus", "complete", self._calc_progress(5))
                 await self._emit_stage("solving", "complete", self._calc_progress(5))
 
                 # Re-verify

@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator, Optional
+from typing import Optional
 
 import aiohttp
 
@@ -151,75 +151,6 @@ class LLMClient:
                     await asyncio.sleep(2 ** attempt)  # exponential backoff
 
         raise Exception(f"LLM API failed after {retries} retries: {last_error}")
-
-    async def chat_stream(
-        self,
-        messages: list[dict],
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-        retries: int = 3,
-    ) -> AsyncGenerator[str, None]:
-        """Stream chat completion response tokens.
-
-        Args:
-            messages: List of message dicts with 'role' and 'content'.
-            temperature: Sampling temperature.
-            max_tokens: Maximum tokens in response.
-            retries: Number of retry attempts on failure.
-
-        Yields:
-            Response text chunks as they arrive.
-        """
-        session = await self._get_session()
-        payload = self._build_payload(messages, temperature, max_tokens, stream=True)
-        headers = self._build_headers()
-        url = self.api_url
-
-        self._log_request()
-
-        last_error = None
-        for attempt in range(retries):
-            try:
-                async with session.post(
-                    url, json=payload, headers=headers
-                ) as resp:
-                    if resp.status != 200:
-                        body = await resp.text()
-                        logger.error("LLM API stream error %s: %s", resp.status, body[:1000])
-                        raise RuntimeError(f"LLM API error {resp.status}")
-
-                    async for line in resp.content:
-                        line_str = line.decode("utf-8").strip()
-                        if not line_str:
-                            continue
-                        if line_str.startswith("data: "):
-                            data_str = line_str[6:]
-                            if data_str == "[DONE]":
-                                return
-                            try:
-                                chunk = json.loads(data_str)
-                                delta = chunk["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
-                                if content:
-                                    yield content
-                            except json.JSONDecodeError:
-                                continue
-                    return
-
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    "LLM stream attempt %d/%d failed: %s",
-                    attempt + 1,
-                    retries,
-                    str(e),
-                )
-                if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)
-
-        raise Exception(
-            f"LLM API streaming failed after {retries} retries: {last_error}"
-        )
 
 
 # Global singleton
