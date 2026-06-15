@@ -54,6 +54,16 @@ class LLMClient:
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=settings.timeout_seconds)
             self._session = aiohttp.ClientSession(timeout=timeout)
+        else:
+            # Check if session is bound to a different (closed) event loop
+            try:
+                current_loop = asyncio.get_running_loop()
+                if hasattr(self._session, '_loop') and self._session._loop is not current_loop:
+                    await self._session.close()
+                    timeout = aiohttp.ClientTimeout(total=settings.timeout_seconds)
+                    self._session = aiohttp.ClientSession(timeout=timeout)
+            except RuntimeError:
+                pass
         return self._session
 
     async def close(self):

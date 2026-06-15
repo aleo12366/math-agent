@@ -17,6 +17,13 @@ from datetime import datetime
 _backend_dir = Path(__file__).parent / "backend"
 sys.path.insert(0, str(_backend_dir))
 
+# Load .env BEFORE importing Settings (pydantic-settings reads env at import time)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_backend_dir / ".env", override=True)
+except ImportError:
+    pass  # dotenv not installed (competition environment — not needed)
+
 from agents.base import BaseAgent
 from config.settings import Settings
 from pipeline.single import SinglePipeline
@@ -80,7 +87,7 @@ class ReasoningAgent:
         # Inject the adapter so all BaseAgent subclasses use the competition client
         BaseAgent._shared_llm = self.adapter
 
-        # Configure settings for competition (no .env file, no local server)
+        # Configure settings
         self.config = Settings(
             temperature=0.3,
             max_tokens=4096,
