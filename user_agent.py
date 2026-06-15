@@ -8,6 +8,7 @@ platform-provided client for LLM calls.
 
 import sys
 import asyncio
+import threading
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -90,6 +91,37 @@ class ReasoningAgent:
 
         logger.info("ReasoningAgent initialized with competition client")
 
+    @staticmethod
+    def _run_async(coro):
+        """Run an async coroutine from either sync or async calling context.
+
+        - If no event loop is running: use asyncio.run()
+        - If an event loop is already running: run in a dedicated thread with its own loop
+        """
+        try:
+            asyncio.get_running_loop()
+            # We're inside an existing event loop — run in a separate thread
+            result = [None]
+            error = [None]
+
+            def _thread_target():
+                try:
+                    result[0] = asyncio.run(coro)
+                except Exception as e:
+                    error[0] = e
+
+            t = threading.Thread(target=_thread_target)
+            t.start()
+            t.join()
+
+            if error[0] is not None:
+                raise error[0]
+            return result[0]
+
+        except RuntimeError:
+            # No event loop running — safe to use asyncio.run()
+            return asyncio.run(coro)
+
     def solve(self, problem: str, metadata: dict) -> dict:
         """Solve a math problem and return the result.
 
@@ -111,8 +143,8 @@ class ReasoningAgent:
                 "content": f"Problem {idx}: {problem[:100]}...",
             })
 
-            # Run the async pipeline synchronously
-            result = asyncio.run(self._solve_async(problem, trace))
+            # Run the async pipeline — handles both sync and async calling contexts
+            result = self._run_async(self._solve_async(problem, trace))
 
             elapsed = (datetime.now() - start_time).total_seconds()
             trace.append({
