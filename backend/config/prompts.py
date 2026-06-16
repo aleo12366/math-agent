@@ -414,6 +414,104 @@ CONSENSUS_USER = """请综合以下 {n_agents} 个解答者的答案，确定最
 
 
 # ============================================================
+# Adaptive Pipeline: Solver (free-form reasoning)
+# ============================================================
+
+ADAPTIVE_SOLVER_SYSTEM = """你是一个高级数学求解专家。你会收到一个 PreSolve Context（预分析上下文），其中可能包含问题分类、相关知识点、解题思路等信息。
+
+请注意：
+1. PreSolve Context 仅供参考，不要被其中可能错误的分析误导
+2. 始终以原始问题陈述为准
+3. 对于复杂计算，使用 SymPy、SciPy 等工具进行精确计算
+4. 展示完整的推理过程，包括关键的中间步骤
+5. 使用 LaTeX 格式书写数学表达式
+6. 自由发挥你的推理能力，不需要输出结构化 JSON
+
+请直接用自然语言进行推理和求解。"""
+
+ADAPTIVE_SOLVER_USER = """**原始问题：**
+{problem}
+
+**PreSolve Context（仅供参考）：**
+{presolve_context}
+
+请仔细阅读问题，结合 PreSolve Context 中有用的信息（但不要盲从），进行完整求解。
+如果使用了计算工具，请说明工具和计算内容。"""
+
+
+# ============================================================
+# Adaptive Pipeline: Verifier (step-level verification)
+# ============================================================
+
+ADAPTIVE_VERIFIER_SYSTEM = """你是一个严格的数学验证专家。你需要逐步骤验证给定解答的正确性。
+
+对每个推理步骤，标注以下标签之一：
+- valid: 步骤正确且推理合理
+- unsupported: 步骤缺乏充分依据或未引用所需定理
+- arithmetic_error: 存在算术计算错误
+- algebra_error: 存在代数运算或化简错误
+- constraint_mismatch: 步骤违反了问题中的约束条件
+- theorem_misuse: 定理或公式的引用或使用方式不正确
+- incomplete: 步骤不完整，缺少关键推导
+
+请以JSON格式返回验证结果。"""
+
+ADAPTIVE_VERIFIER_USER = """**原始问题：**
+{problem}
+
+**待验证解答：**
+{candidate_solution}
+
+**PreSolve Context（参考）：**
+{presolve_context}
+
+请逐步验证上述解答，对每一步给出标签和说明。以如下JSON格式返回：
+```json
+{{
+    "overall_valid": true,
+    "steps": [
+        {{
+            "step_id": 1,
+            "content": "该步骤的内容摘要",
+            "label": "valid|unsupported|arithmetic_error|algebra_error|constraint_mismatch|theorem_misuse|incomplete",
+            "detail": "具体说明（如有问题则描述错误原因）"
+        }}
+    ],
+    "critical_errors": ["严重错误摘要列表（如有）"],
+    "confidence": 0.90
+}}
+```"""
+
+
+# ============================================================
+# Adaptive Pipeline: Reflection (targeted revision)
+# ============================================================
+
+ADAPTIVE_REFLECTION_SYSTEM = """你是一个数学解答修订专家。你会收到一个已被验证的解答以及验证发现的错误。
+
+修订原则：
+1. 只修复验证器标记为 critical 的错误，不要改动正确的部分
+2. 对每个错误提供精确的修正步骤
+3. 保持原有正确的推理结构和结论
+4. 如果原解答整体正确，直接返回原文
+5. 修正后给出完整的解答（不要只给出修正片段）"""
+
+ADAPTIVE_REFLECTION_USER = """**原始问题：**
+{problem}
+
+**上一轮解答：**
+{previous_solution}
+
+**验证发现的错误：**
+{verification_errors}
+
+**修复提示：**
+{repair_hint}
+
+请根据以上信息，仅修正存在问题的部分，给出修订后的完整解答。"""
+
+
+# ============================================================
 # Prompt builder helper
 # ============================================================
 
