@@ -1,7 +1,6 @@
-"""API routes for the math agent system."""
+"""API routes for the math agent system — adaptive pipeline only."""
 
 import logging
-import os
 import time
 from datetime import datetime
 from enum import Enum
@@ -19,38 +18,32 @@ from config.schemas import (
     ConfigResponse,
     ConfigUpdateRequest,
     MathAgentOutput,
-    PipelineMode,
 )
-from pipeline.single import SinglePipeline
-from pipeline.multi import MultiPipeline
+from pipeline.adaptive import AdaptivePipeline
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-# Track server start time
 _server_start_time = time.time()
-
-
-def _create_pipeline(mode: str = "single", debate_agents: int = 1, event_bus: EventBus = None):
-    """Create a pipeline instance based on mode."""
-    if mode == "multi_debate":
-        config = settings.model_copy(update={"debate_agents": debate_agents})
-        return MultiPipeline(config=config, event_bus=event_bus)
-    else:
-        return SinglePipeline(config=settings, event_bus=event_bus)
 
 
 @router.post("/solve", response_model=MathAgentOutput)
 async def solve_problem(request: SolveRequest):
-    """Solve a single math problem.
+    """Solve a single math problem using the adaptive pipeline.
+
+    Guard Layer (<100ms) selects the optimal route automatically:
+    - simple: 1 LLM call (~15-30s)
+    - standard: 3 LLM calls (~45-90s)
+    - complex: 6 LLM calls (~2-3min, parallel solvers + consensus)
+    - safe_fallback: high-verification multi-path
 
     If stream=True, returns SSE events during processing.
     If stream=False, returns the final JSON result.
     """
     if request.stream:
         event_bus = EventBus()
-        pipeline = _create_pipeline(request.mode, request.debate_agents, event_bus)
+        pipeline = AdaptivePipeline(config=settings, event_bus=event_bus)
 
         async def event_generator():
             import asyncio
@@ -106,7 +99,6 @@ async def solve_problem(request: SolveRequest):
                     pass
                 raise
             finally:
-                # Bug #3 fix: cleanup subscriber queue
                 async with event_bus._lock:
                     if queue in event_bus._subscribers:
                         event_bus._subscribers.remove(queue)
@@ -122,7 +114,7 @@ async def solve_problem(request: SolveRequest):
         )
     else:
         # Non-streaming: return final result
-        pipeline = _create_pipeline(request.mode, request.debate_agents)
+        pipeline = AdaptivePipeline(config=settings)
         try:
             result = await pipeline.solve(request.problem)
             return result
@@ -133,12 +125,12 @@ async def solve_problem(request: SolveRequest):
 
 @router.post("/batch")
 async def solve_batch(request: BatchSolveRequest):
-    """Solve a batch of math problems."""
+    """Solve a batch of math problems using the adaptive pipeline."""
     import asyncio
 
     async def solve_one(problem: str):
         try:
-            p = _create_pipeline(request.mode, request.debate_agents)
+            p = AdaptivePipeline(config=settings)
             return await p.solve(problem)
         except Exception as e:
             return {"error": str(e), "problem": problem}
@@ -146,7 +138,6 @@ async def solve_batch(request: BatchSolveRequest):
     tasks = [solve_one(p) for p in request.problems]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Serialize results
     output = []
     for r in results:
         if isinstance(r, MathAgentOutput):
@@ -160,35 +151,28 @@ async def solve_batch(request: BatchSolveRequest):
 
 
 def _mask_api_key(key: str) -> str:
-    """Mask API key for safe display (show first 6 and last 4 chars)."""
+    """Mask API key for safe display."""
     if not key or len(key) < 12:
         return "****" if key else ""
     return key[:6] + "****" + key[-4:]
 
 
 def _save_env_file(updates: dict):
-    """Persist configuration changes to the .env file.
-
-    Reads existing .env, updates changed values, writes back.
-    Only saves fields that are relevant to the .env file.
-    """
+    """Persist configuration changes to the .env file."""
     env_path = Path(__file__).parent.parent / ".env"
 
-    # Keys we persist to .env
     env_keys = {
         "api_url": "MATH_AGENT_API_URL",
         "api_key": "MATH_AGENT_API_KEY",
         "model_name": "MATH_AGENT_MODEL_NAME",
         "temperature": "MATH_AGENT_TEMPERATURE",
         "max_tokens": "MATH_AGENT_MAX_TOKENS",
-        "pipeline_mode": "MATH_AGENT_PIPELINE_MODE",
         "debate_agents": "MATH_AGENT_DEBATE_AGENTS",
         "max_retries": "MATH_AGENT_MAX_RETRIES",
         "verification_threshold": "MATH_AGENT_VERIFICATION_THRESHOLD",
         "confidence_threshold": "MATH_AGENT_CONFIDENCE_THRESHOLD",
     }
 
-    # Read existing .env lines
     existing_lines: list[str] = []
     existing_keys: set[str] = set()
     if env_path.exists():
@@ -198,7 +182,6 @@ def _save_env_file(updates: dict):
             if stripped and not stripped.startswith("#") and "=" in stripped:
                 existing_keys.add(stripped.split("=", 1)[0].strip())
 
-    # Build update lines
     env_updates: dict[str, str] = {}
     for field_name, env_key in env_keys.items():
         if field_name in updates:
@@ -207,7 +190,6 @@ def _save_env_file(updates: dict):
     if not env_updates:
         return
 
-    # Merge: update existing lines or append new ones
     new_lines: list[str] = []
     updated_keys: set[str] = set()
 
@@ -221,7 +203,6 @@ def _save_env_file(updates: dict):
                 continue
         new_lines.append(line)
 
-    # Append any new keys not already in file
     for key, value in env_updates.items():
         if key not in updated_keys:
             new_lines.append(f"{key}={value}")
@@ -241,7 +222,6 @@ def _build_config_response() -> ConfigResponse:
         has_api_key=has_key,
         temperature=settings.temperature,
         max_tokens=settings.max_tokens,
-        pipeline_mode=settings.pipeline_mode,
         debate_agents=settings.debate_agents,
         max_retries=settings.max_retries,
         verification_threshold=settings.verification_threshold,
@@ -260,10 +240,8 @@ async def update_config(request: ConfigUpdateRequest):
     """Update configuration and persist to .env file."""
     update_data = request.model_dump(exclude_none=True, mode="json")
 
-    # Separate API key from other fields (need special handling)
     new_api_key = update_data.pop("api_key", None)
 
-    # Update in-memory settings with validation
     for key, value in update_data.items():
         if hasattr(settings, key):
             field = settings.model_fields.get(key)
@@ -275,17 +253,13 @@ async def update_config(request: ConfigUpdateRequest):
                     continue
             setattr(settings, key, value)
 
-    # Update API key if provided
     if new_api_key is not None:
         settings.api_key = new_api_key
 
-    # Also reload LLM client to pick up new API config
     from utils.llm_client import llm_client
     llm_client.api_url = settings.api_url
     llm_client.api_key = settings.api_key
     llm_client.model_name = settings.model_name
-
-    # Reset session to avoid stale connections to old URL
     await llm_client.reset_session()
 
     logger.info(
@@ -293,7 +267,6 @@ async def update_config(request: ConfigUpdateRequest):
         settings.api_url, settings.model_name, bool(settings.api_key),
     )
 
-    # Persist all changes to .env file
     persist_data = {**update_data}
     if new_api_key is not None:
         persist_data["api_key"] = new_api_key
@@ -308,7 +281,7 @@ async def health_check():
     uptime = time.time() - _server_start_time
     return HealthResponse(
         status="ok",
-        version="2.0.0",
+        version="3.0.0",
         model=settings.model_name,
         uptime_seconds=uptime,
     )
@@ -316,7 +289,7 @@ async def health_check():
 
 @router.post("/config/test")
 async def test_api_connection():
-    """Test the current LLM API connection by sending a simple request."""
+    """Test the current LLM API connection."""
     from utils.llm_client import llm_client
 
     result = {

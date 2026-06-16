@@ -2,7 +2,6 @@
 
 from pydantic_settings import BaseSettings
 from pydantic import Field
-from config.schemas import PipelineMode
 
 
 class Settings(BaseSettings):
@@ -27,9 +26,8 @@ class Settings(BaseSettings):
     max_tokens: int = Field(default=4096, ge=1, le=32768)
     top_p: float = Field(default=0.9, ge=0.0, le=1.0)
 
-    # Pipeline Configuration
+    # Pipeline Configuration (adaptive — no mode selector needed)
     max_retries: int = Field(default=3, ge=0, le=10)
-    pipeline_mode: PipelineMode = Field(default=PipelineMode.SINGLE, description="single or multi_debate")
     debate_agents: int = Field(default=3, ge=1, le=10)
     timeout_seconds: int = Field(default=300, ge=10, le=600)
 

@@ -199,11 +199,11 @@ class Formatter:
                 ))
 
         # Build metadata
-        mode_str = all_outputs.get("_pipeline_mode", "single")
+        mode_str = all_outputs.get("_pipeline_mode", "adaptive")
         try:
             mode = PipelineMode(mode_str)
         except ValueError:
-            mode = PipelineMode.SINGLE
+            mode = PipelineMode.ADAPTIVE
 
         metadata = PipelineMetadata(
             model=model_name,

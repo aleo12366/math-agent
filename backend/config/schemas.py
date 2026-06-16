@@ -96,6 +96,7 @@ class ErrorType(str, Enum):
 class PipelineMode(str, Enum):
     SINGLE = "single"
     MULTI_DEBATE = "multi_debate"
+    ADAPTIVE = "adaptive"
 
 
 class ModuleName(str, Enum):
@@ -173,8 +174,8 @@ class ErrorLog(BaseModel):
 
 class PipelineMetadata(BaseModel):
     model: str = "Intern-S1"
-    mode: PipelineMode = PipelineMode.SINGLE
-    debate_agents: int = Field(ge=1, default=1)
+    mode: PipelineMode = PipelineMode.ADAPTIVE
+    debate_agents: int = Field(ge=1, default=3)
     retry_count: int = Field(ge=0, default=0)
     created_at: datetime = Field(default_factory=datetime.now)
 
@@ -214,15 +215,11 @@ class MathAgentOutput(BaseModel):
 
 class SolveRequest(BaseModel):
     problem: str = Field(..., min_length=1, description="The math problem to solve")
-    mode: PipelineMode = PipelineMode.SINGLE
-    debate_agents: int = Field(default=1, ge=1, le=10)
     stream: bool = Field(default=True, description="Whether to stream SSE events")
 
 
 class BatchSolveRequest(BaseModel):
     problems: list[str] = Field(..., min_length=1, max_length=10)
-    mode: PipelineMode = PipelineMode.SINGLE
-    debate_agents: int = Field(default=1, ge=1, le=10)
 
 
 class HealthResponse(BaseModel):
@@ -239,7 +236,6 @@ class ConfigResponse(BaseModel):
     has_api_key: bool = False
     temperature: float
     max_tokens: int
-    pipeline_mode: str
     debate_agents: int
     max_retries: int
     verification_threshold: float
@@ -252,7 +248,6 @@ class ConfigUpdateRequest(BaseModel):
     model_name: Optional[str] = None
     temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(default=None, ge=1, le=32768)
-    pipeline_mode: Optional[PipelineMode] = None
     debate_agents: Optional[int] = Field(default=None, ge=1, le=10)
     max_retries: Optional[int] = Field(default=None, ge=0, le=10)
     verification_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
