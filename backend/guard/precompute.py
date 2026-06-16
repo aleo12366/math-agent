@@ -62,19 +62,19 @@ def _precompute_calculus(text: str, graph: dict[str, Any]) -> list[dict[str, Any
 
     integrand, var_name, _limits = _extract_integral(text)
     if integrand and var_name and _SYMPY_AVAILABLE:
-            try:
-                x = symbols(var_name)
-                expr = _safe_parse(integrand, local_dict={var_name: x})
-                if expr is not None:
-                    result = integrate(expr, x)
-                    candidates.append({
-                        "type": "indefinite_integral",
-                        "expr": str(expr),
-                        "result": str(result),
-                        "var": var_name,
-                    })
-            except Exception as e:
-                logger.debug("Precompute calculus (integral) failed: %s", e)
+        try:
+            x = symbols(var_name)
+            expr = _safe_parse(integrand, local_dict={var_name: x})
+            if expr is not None:
+                result = integrate(expr, x)
+                candidates.append({
+                    "type": "indefinite_integral",
+                    "expr": str(expr),
+                    "result": str(result),
+                    "var": var_name,
+                })
+        except Exception as e:
+            logger.debug("Precompute calculus (integral) failed: %s", e)
 
     lhs_str, rhs_str = _extract_simple_equation(text)
     if lhs_str and rhs_str and _SYMPY_AVAILABLE:

@@ -49,7 +49,7 @@ def build_presolve_context(raw_problem: str) -> dict[str, Any]:
     )
     precompute = local_precompute(constraint_graph, classification)
 
-    # Retrieval (limited by evidence budget)
+    # Initial retrieval estimate for router confidence
     similar_cases = retrieve_similar(raw_problem, route="standard", top_k=5)
     retrieval_score = 0.5 if similar_cases else 0.0
 
@@ -67,9 +67,12 @@ def build_presolve_context(raw_problem: str) -> dict[str, Any]:
         "tool_success": tool_success,
     })
 
-    # Re-retrieve with budget for the selected route
+    # Apply evidence budget: re-filter results for the selected route
     route = fusion.get("route", "standard")
-    similar_cases = retrieve_similar(raw_problem, route=route, top_k=5)
+    budget = retrieve_similar.__defaults__  # not reliable, use EVIDENCE_BUDGET directly
+    from .retriever import EVIDENCE_BUDGET
+    max_cases = EVIDENCE_BUDGET.get(route, EVIDENCE_BUDGET["standard"])["similar_cases"]
+    budgeted_cases = similar_cases[:max_cases]
 
     return {
         "problem_id": str(uuid.uuid4()),
@@ -79,7 +82,7 @@ def build_presolve_context(raw_problem: str) -> dict[str, Any]:
         "risk": risk,
         "classification": classification,
         "retrieval": {
-            "similar_cases": similar_cases,
+            "similar_cases": budgeted_cases,
             "method_templates": [],
         },
         "precompute": precompute,

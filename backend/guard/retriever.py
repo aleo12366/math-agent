@@ -28,6 +28,12 @@ EVIDENCE_BUDGET: dict[str, dict[str, int]] = {
 _bank_cache: list[dict[str, Any]] | None = None
 
 
+def clear_bank_cache():
+    """Clear the in-memory problem bank cache (call after updating bank files)."""
+    global _bank_cache
+    _bank_cache = None
+
+
 def _load_problem_bank() -> list[dict[str, Any]]:
     """Load all problem bank JSONL files."""
     global _bank_cache

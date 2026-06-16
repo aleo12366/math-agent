@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json as _json
 import logging
 from typing import Any
 
 from pipeline.canonicalizer import answers_match
-from config.prompts import (
-    ADAPTIVE_VERIFIER_SYSTEM,
-    ADAPTIVE_VERIFIER_USER,
-    format_prompt,
-)
+from pipeline.routes._common import run_adaptive_verifier
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +113,7 @@ async def route_safe_fallback(
     # Stage: Verification (step-level JSON)
     await emit_stage("verification", "started", 70)
     best_solution = valid_results[0]
-    verification = await _run_adaptive_verifier(
+    verification = await run_adaptive_verifier(
         verifier=verifier,
         problem=problem,
         solution=best_solution,
@@ -153,60 +148,3 @@ async def route_safe_fallback(
         )
 
     return all_outputs
-
-
-async def _run_adaptive_verifier(
-    *,
-    verifier: Any,
-    problem: str,
-    solution: dict,
-    ctx: dict,
-) -> dict:
-    """Run verifier with adaptive step-level prompt."""
-    candidate_text = solution.get("raw_response", "")
-    if not candidate_text:
-        steps = solution.get("reasoning_steps", [])
-        candidate_text = "\n".join(
-            f"Step {s.get('step_id', '?')}: {s.get('description', '')} → {s.get('result', '')}"
-            for s in steps if isinstance(s, dict)
-        )
-
-    ctx_str = _json.dumps(ctx, ensure_ascii=False, indent=2) if ctx else "(无)"
-
-    user_prompt = format_prompt(
-        ADAPTIVE_VERIFIER_USER,
-        problem=problem,
-        candidate_solution=candidate_text,
-        presolve_context=ctx_str,
-    )
-
-    messages = verifier.build_messages(
-        system_prompt=ADAPTIVE_VERIFIER_SYSTEM,
-        user_prompt=user_prompt,
-    )
-
-    try:
-        response = await verifier.call_llm(messages)
-        result = verifier.extract_json(response)
-
-        if result is None:
-            return verifier._build_default_result("Adaptive verification failed to parse")
-
-        verified = result.get("overall_valid", False)
-        confidence = result.get("confidence", 0.0)
-        critical_errors = result.get("critical_errors", [])
-
-        return {
-            "verified": verified,
-            "confidence": max(0.0, min(1.0, float(confidence))),
-            "overall_score": confidence if verified else max(0.0, confidence - 0.3),
-            "details": {
-                "step_labels": result.get("steps", []),
-                "critical_errors": critical_errors,
-            },
-            "issues_found": critical_errors,
-            "suggestions": [result.get("repair_hint", "Review critical errors")],
-        }
-    except Exception as e:
-        logger.error("Adaptive verifier error: %s", e)
-        return verifier._build_default_result(str(e))
