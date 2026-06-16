@@ -138,7 +138,7 @@ math-agent/
 from user_agent import ReasoningAgent
 
 agent = ReasoningAgent(client=platform_client)
-result = agent.solve("设f在凸区域Ω上全纯，且Re f'(z)>0...", metadata={})
+result = agent.solve("", metadata={})
 # result = {"final_response": "...", "trace": [...]}
 ```
 
