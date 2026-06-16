@@ -136,8 +136,7 @@ _KNOWN_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
 _EQUALITY_RE = re.compile(r"[^=!<>]=[^=]")
 _INEQUALITY_RE = re.compile(r"[<>≤≥]|\\leq|\\geq|\\lt|\\gt")
 _BOUNDARY_RE = re.compile(
-    r"[yY]\s*\(\s*[^)]+\s*\)\s*="
-    r"|[uU]\s*\(\s*[^)]+\s*\)\s*="
+    r"[yYuU]\s*\(\s*[^)]+\s*\)\s*="
 )
 _INITIAL_RE = re.compile(
     r"[yY]\s*\(\s*0\s*\)\s*="
@@ -150,7 +149,7 @@ _DOMAIN_RE = re.compile(
 )
 _PDE_SYMBOLS = {"∂", "\\partial", "偏微分", "PDE", "pde"}
 _CASE_SPLIT_KW = {"讨论", "参数", "parameter", "parametric", "cases", "分情况"}
-_TOOL_KW = {"数值", "近似", "numerical", "approximate", "计算", "积分", "integral"}
+_TOOL_KW = {"数值", "近似", "numerical", "approximate", "数值积分", "数值解"}
 
 
 def extract_variables(text: str, latex_blocks: list[str]) -> list[str]:
