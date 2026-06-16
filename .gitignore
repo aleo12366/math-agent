@@ -39,3 +39,11 @@ docker-compose.override.yml
 # Misc
 *.log
 *.bak
+
+# Test artifacts
+test_outputs/
+test_problems.json
+run_test.py
+test_single.py
+.pytest_cache/
+.mypy_cache/
