@@ -1,13 +1,22 @@
-"""Complex route: planner → solver×N → canonicalize → verify → consensus → reflect → format (7-16 LLM calls)."""
+"""Complex route: planner → solver×N (freeform) → canonicalize → verify → consensus → reflect → format."""
 
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 from typing import Any
 
 from pipeline.canonicalizer import canonicalize_answer, answers_match
-from config.prompts import CONSENSUS_SYSTEM, CONSENSUS_USER, format_prompt
+from config.prompts import (
+    CONSENSUS_SYSTEM,
+    CONSENSUS_USER,
+    ADAPTIVE_VERIFIER_SYSTEM,
+    ADAPTIVE_VERIFIER_USER,
+    ADAPTIVE_REFLECTION_SYSTEM,
+    ADAPTIVE_REFLECTION_USER,
+    format_prompt,
+)
 from utils.llm_client import llm_client
 from utils.json_parser import extract_json_from_text
 
@@ -27,22 +36,10 @@ async def route_complex(
     emit_stage: Any,
     all_outputs: dict[str, Any],
 ) -> dict[str, Any]:
-    """Run the complex route with parallel solvers, canonicalization, and consensus.
+    """Run the complex route with parallel freeform solvers, canonicalization, and consensus.
 
-    Args:
-        planner: Planner agent instance.
-        solver: Solver agent instance.
-        verifier: Verifier agent instance.
-        reflection: Reflection agent instance.
-        tool_agent: ToolAgent instance.
-        problem: Problem text.
-        ctx: PreSolve context.
-        config: Settings instance.
-        emit_stage: Coroutine to emit stage events.
-        all_outputs: Mutable dict accumulating outputs.
-
-    Returns:
-        Updated all_outputs dict.
+    Dual-channel: solver uses freeform reasoning, verifier uses step-level JSON.
+    PreSolve Context passed to all agents.
     """
     normalized = ctx.get("normalized", {})
     classification = ctx.get("classification", {})
@@ -53,11 +50,7 @@ async def route_complex(
         "problem": problem,
         "cleaned_problem": normalized.get("clean_text", problem),
         "domain": classification.get("domain", "微积分"),
-        "problem_type": classification.get("problem_type", "计算题"),
-        "difficulty": classification.get("difficulty", "hard"),
-        "knowledge_points": classification.get("knowledge_points", []),
-        "relevant_theorems": classification.get("relevant_theorems", []),
-        "solution_methods": classification.get("solution_methods", []),
+        "presolve_context": ctx,
     }
 
     # Stage: Planning
@@ -66,7 +59,7 @@ async def route_complex(
     all_outputs["planning"] = planning
     await emit_stage("planning", "complete", 20)
 
-    # Stage: Parallel Solving
+    # Stage: Parallel Solving (freeform, no JSON constraint)
     await emit_stage("solving", "started", 25)
     solve_context = {**base_context, **planning}
 
@@ -75,7 +68,7 @@ async def route_complex(
         s.config = config.model_copy(update={
             "temperature": min(1.5, config.temperature + agent_id * 0.1)
         })
-        result = await s.run({**solve_context, "agent_id": agent_id})
+        result = await s.run_freeform({**solve_context, "agent_id": agent_id})
         result["_agent_id"] = agent_id
         return result
 
@@ -104,14 +97,15 @@ async def route_complex(
     all_outputs["canonicalized_answers"] = canonicalized
     await emit_stage("canonicalization", "complete", 60)
 
-    # Stage: Verification (on best candidate)
+    # Stage: Verification (step-level JSON on best candidate)
     await emit_stage("verification", "started", 65)
     best_solution = valid_results[0]
-    verification = await verifier.run({
-        "problem": problem,
-        "cleaned_problem": normalized.get("clean_text", problem),
-        **best_solution,
-    })
+    verification = await _run_adaptive_verifier(
+        verifier=verifier,
+        problem=problem,
+        solution=best_solution,
+        ctx=ctx,
+    )
     all_outputs["verification"] = verification
     await emit_stage("verification", "complete", 72)
 
@@ -134,17 +128,19 @@ async def route_complex(
     all_outputs["all_solutions"] = valid_results
     await emit_stage("consensus", "complete", 82)
 
-    # Stage: Reflection + Retry
+    # Stage: Reflection + Retry (targeted, verifier-triggered)
     max_retries = config.max_retries
     retry_count = 0
 
     while not verification.get("verified", False) and retry_count < max_retries:
         await emit_stage("reflection", "started", 85)
-        reflection_result = await reflection.run({
-            "problem": problem,
-            "cleaned_problem": normalized.get("clean_text", problem),
-            **best_solution, **verification,
-        })
+        reflection_result = await _run_adaptive_reflection(
+            reflection=reflection,
+            problem=problem,
+            solution=best_solution,
+            verification=verification,
+            ctx=ctx,
+        )
         all_outputs["reflection"] = reflection_result
         await emit_stage("reflection", "complete", 88)
 
@@ -162,7 +158,7 @@ async def route_complex(
             s.config = config.model_copy(update={
                 "temperature": min(1.5, config.temperature + i * 0.1)
             })
-            retry_tasks.append(s.run({**retry_context, "agent_id": i}))
+            retry_tasks.append(s.run_freeform({**retry_context, "agent_id": i}))
         solver_results = await asyncio.gather(*retry_tasks, return_exceptions=True)
         valid_results = [r for r in solver_results if isinstance(r, dict) and "final_answer" in r]
         if not valid_results:
@@ -193,15 +189,128 @@ async def route_complex(
         await emit_stage("consensus", "complete", 82)
 
         await emit_stage("verification", "started", 65)
-        verification = await verifier.run({
-            "problem": problem,
-            "cleaned_problem": normalized.get("clean_text", problem),
-            **best_solution,
-        })
+        verification = await _run_adaptive_verifier(
+            verifier=verifier,
+            problem=problem,
+            solution=best_solution,
+            ctx=ctx,
+        )
         all_outputs["verification"] = verification
         await emit_stage("verification", "complete", 72)
 
     return all_outputs
+
+
+async def _run_adaptive_verifier(
+    *,
+    verifier: Any,
+    problem: str,
+    solution: dict,
+    ctx: dict,
+) -> dict:
+    """Run verifier with adaptive step-level prompt."""
+    candidate_text = solution.get("raw_response", "")
+    if not candidate_text:
+        steps = solution.get("reasoning_steps", [])
+        candidate_text = "\n".join(
+            f"Step {s.get('step_id', '?')}: {s.get('description', '')} → {s.get('result', '')}"
+            for s in steps if isinstance(s, dict)
+        )
+
+    ctx_str = _json.dumps(ctx, ensure_ascii=False, indent=2) if ctx else "(无)"
+
+    user_prompt = format_prompt(
+        ADAPTIVE_VERIFIER_USER,
+        problem=problem,
+        candidate_solution=candidate_text,
+        presolve_context=ctx_str,
+    )
+
+    messages = verifier.build_messages(
+        system_prompt=ADAPTIVE_VERIFIER_SYSTEM,
+        user_prompt=user_prompt,
+    )
+
+    try:
+        response = await verifier.call_llm(messages)
+        result = verifier.extract_json(response)
+
+        if result is None:
+            return verifier._build_default_result("Adaptive verification failed to parse")
+
+        verified = result.get("overall_valid", False)
+        confidence = result.get("confidence", 0.0)
+        critical_errors = result.get("critical_errors", [])
+
+        return {
+            "verified": verified,
+            "confidence": max(0.0, min(1.0, float(confidence))),
+            "overall_score": confidence if verified else max(0.0, confidence - 0.3),
+            "details": {
+                "step_labels": result.get("steps", []),
+                "critical_errors": critical_errors,
+            },
+            "issues_found": critical_errors,
+            "suggestions": [result.get("repair_hint", "Review critical errors")],
+        }
+    except Exception as e:
+        logger.error("Adaptive verifier error: %s", e)
+        return verifier._build_default_result(str(e))
+
+
+async def _run_adaptive_reflection(
+    *,
+    reflection: Any,
+    problem: str,
+    solution: dict,
+    verification: dict,
+    ctx: dict,
+) -> dict:
+    """Run reflection with adaptive targeted-revision prompt."""
+    prev_solution = solution.get("raw_response", solution.get("final_answer", ""))
+    errors = verification.get("issues_found", [])
+    errors_str = "\n".join(f"- {e}" for e in errors) if errors else "(无)"
+    repair_hint = "; ".join(verification.get("suggestions", [])) or "(无)"
+
+    user_prompt = format_prompt(
+        ADAPTIVE_REFLECTION_USER,
+        problem=problem,
+        previous_solution=prev_solution,
+        verification_errors=errors_str,
+        repair_hint=repair_hint,
+    )
+
+    messages = reflection.build_messages(
+        system_prompt=ADAPTIVE_REFLECTION_SYSTEM,
+        user_prompt=user_prompt,
+    )
+
+    try:
+        response = await reflection.call_llm(messages)
+        result = reflection.extract_json(response)
+
+        if result is None:
+            # Freeform reflection — treat as revised solution
+            return {
+                "revised_solution": response,
+                "retry_recommended": True,
+                "correction_strategy": {"hints": repair_hint},
+                "raw_response": response,
+            }
+
+        return {
+            "revised_solution": result.get("revised_solution", response),
+            "retry_recommended": result.get("retry_recommended", True),
+            "correction_strategy": result.get("correction_strategy", {}),
+            "raw_response": response,
+        }
+    except Exception as e:
+        logger.error("Adaptive reflection error: %s", e)
+        return {
+            "revised_solution": "",
+            "retry_recommended": False,
+            "error": str(e),
+        }
 
 
 async def _run_consensus(problem: str, solver_results: list[dict], n_agents: int) -> dict:

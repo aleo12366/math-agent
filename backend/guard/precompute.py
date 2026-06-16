@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     import sympy
@@ -59,19 +62,19 @@ def _precompute_calculus(text: str, graph: dict[str, Any]) -> list[dict[str, Any
 
     integrand, var_name, _limits = _extract_integral(text)
     if integrand and var_name and _SYMPY_AVAILABLE:
-        try:
-            x = symbols(var_name)
-            expr = _safe_parse(integrand, local_dict={var_name: x})
-            if expr is not None:
-                result = integrate(expr, x)
-                candidates.append({
-                    "type": "indefinite_integral",
-                    "expr": str(expr),
-                    "result": str(result),
-                    "var": var_name,
-                })
-        except Exception:
-            pass
+            try:
+                x = symbols(var_name)
+                expr = _safe_parse(integrand, local_dict={var_name: x})
+                if expr is not None:
+                    result = integrate(expr, x)
+                    candidates.append({
+                        "type": "indefinite_integral",
+                        "expr": str(expr),
+                        "result": str(result),
+                        "var": var_name,
+                    })
+            except Exception as e:
+                logger.debug("Precompute calculus (integral) failed: %s", e)
 
     lhs_str, rhs_str = _extract_simple_equation(text)
     if lhs_str and rhs_str and _SYMPY_AVAILABLE:
@@ -89,8 +92,8 @@ def _precompute_calculus(text: str, graph: dict[str, Any]) -> list[dict[str, Any
                             "equation": f"{lhs_str} = {rhs_str}",
                             "solutions": [str(s) for s in solutions],
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Precompute calculus (equation) failed: %s", e)
 
     return candidates
 
@@ -132,8 +135,8 @@ def _precompute_algebra(text: str, graph: dict[str, Any]) -> list[dict[str, Any]
                     "equations": equalities,
                     "solutions": [{str(k): str(v) for k, v in sol.items()} if isinstance(sol, dict) else str(sol) for sol in solutions],
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Precompute algebra (linear system) failed: %s", e)
 
     return candidates
 

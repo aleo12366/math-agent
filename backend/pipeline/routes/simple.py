@@ -1,4 +1,4 @@
-"""Simple route: solver → format (1 LLM call)."""
+"""Simple route: solver (freeform) → format (1 LLM call)."""
 
 from __future__ import annotations
 
@@ -18,19 +18,9 @@ async def route_simple(
     emit_stage: Any,
     all_outputs: dict[str, Any],
 ) -> dict[str, Any]:
-    """Run the simple route: one solver call then format.
+    """Run the simple route: one freeform solver call then format.
 
-    Args:
-        solver: Solver agent instance.
-        formatter: Formatter instance.
-        problem: Problem text.
-        ctx: PreSolve context from build_presolve_context.
-        config: Settings instance.
-        emit_stage: Coroutine to emit stage events.
-        all_outputs: Mutable dict accumulating outputs.
-
-    Returns:
-        Updated all_outputs dict.
+    Uses run_freeform (no JSON constraint) with PreSolve Context passed to solver.
     """
     normalized = ctx.get("normalized", {})
     classification = ctx.get("classification", {})
@@ -39,14 +29,11 @@ async def route_simple(
         "problem": problem,
         "cleaned_problem": normalized.get("clean_text", problem),
         "domain": classification.get("domain", "微积分"),
-        "problem_type": classification.get("problem_type", "计算题"),
-        "difficulty": classification.get("difficulty", "medium"),
-        "strategy": "Direct computation",
-        "steps": [],
+        "presolve_context": ctx,
     }
 
     await emit_stage("solving", "started", 50)
-    solving = await solver.run(solver_input)
+    solving = await solver.run_freeform(solver_input)
     all_outputs["solving"] = solving
     await emit_stage("solving", "complete", 80)
 

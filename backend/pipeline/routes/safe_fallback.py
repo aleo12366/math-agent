@@ -1,12 +1,18 @@
-"""Safe fallback route: planner → solver×N → mandatory tool crosscheck → verifier → flag uncertainty."""
+"""Safe fallback route: planner → solver×N (freeform) → mandatory tool crosscheck → verifier → flag uncertainty."""
 
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 from typing import Any
 
-from pipeline.canonicalizer import canonicalize_answer, answers_match
+from pipeline.canonicalizer import answers_match
+from config.prompts import (
+    ADAPTIVE_VERIFIER_SYSTEM,
+    ADAPTIVE_VERIFIER_USER,
+    format_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,22 +31,8 @@ async def route_safe_fallback(
 ) -> dict[str, Any]:
     """Run the safe_fallback route with mandatory tool crosscheck and uncertainty flagging.
 
-    This route is used when the guard layer detects signal conflicts or parse failures.
-    It runs multiple solvers, crosschecks with tools, verifies, and flags uncertainty.
-
-    Args:
-        planner: Planner agent instance.
-        solver: Solver agent instance.
-        verifier: Verifier agent instance.
-        tool_agent: ToolAgent instance.
-        problem: Problem text.
-        ctx: PreSolve context.
-        config: Settings instance.
-        emit_stage: Coroutine to emit stage events.
-        all_outputs: Mutable dict accumulating outputs.
-
-    Returns:
-        Updated all_outputs dict with uncertainty_flags.
+    Dual-channel: solver uses freeform reasoning, verifier uses step-level JSON.
+    PreSolve Context passed to all agents.
     """
     normalized = ctx.get("normalized", {})
     classification = ctx.get("classification", {})
@@ -52,11 +44,7 @@ async def route_safe_fallback(
         "problem": problem,
         "cleaned_problem": normalized.get("clean_text", problem),
         "domain": classification.get("domain", "微积分"),
-        "problem_type": classification.get("problem_type", "计算题"),
-        "difficulty": classification.get("difficulty", "medium"),
-        "knowledge_points": classification.get("knowledge_points", []),
-        "relevant_theorems": classification.get("relevant_theorems", []),
-        "solution_methods": classification.get("solution_methods", []),
+        "presolve_context": ctx,
     }
 
     # Stage: Planning
@@ -65,7 +53,7 @@ async def route_safe_fallback(
     all_outputs["planning"] = planning
     await emit_stage("planning", "complete", 25)
 
-    # Stage: Parallel Solving
+    # Stage: Parallel Solving (freeform)
     await emit_stage("solving", "started", 30)
     solve_context = {**base_context, **planning}
 
@@ -74,7 +62,7 @@ async def route_safe_fallback(
         s.config = config.model_copy(update={
             "temperature": min(1.5, config.temperature + agent_id * 0.1)
         })
-        result = await s.run({**solve_context, "agent_id": agent_id})
+        result = await s.run_freeform({**solve_context, "agent_id": agent_id})
         result["_agent_id"] = agent_id
         return result
 
@@ -127,14 +115,15 @@ async def route_safe_fallback(
     all_outputs["tool_crosscheck"] = [r.get("_tool_crosscheck", []) for r in valid_results]
     await emit_stage("tool_crosscheck", "complete", 65)
 
-    # Stage: Verification
+    # Stage: Verification (step-level JSON)
     await emit_stage("verification", "started", 70)
     best_solution = valid_results[0]
-    verification = await verifier.run({
-        "problem": problem,
-        "cleaned_problem": normalized.get("clean_text", problem),
-        **best_solution,
-    })
+    verification = await _run_adaptive_verifier(
+        verifier=verifier,
+        problem=problem,
+        solution=best_solution,
+        ctx=ctx,
+    )
     all_outputs["verification"] = verification
     all_outputs["solving"] = best_solution
     await emit_stage("verification", "complete", 85)
@@ -164,3 +153,60 @@ async def route_safe_fallback(
         )
 
     return all_outputs
+
+
+async def _run_adaptive_verifier(
+    *,
+    verifier: Any,
+    problem: str,
+    solution: dict,
+    ctx: dict,
+) -> dict:
+    """Run verifier with adaptive step-level prompt."""
+    candidate_text = solution.get("raw_response", "")
+    if not candidate_text:
+        steps = solution.get("reasoning_steps", [])
+        candidate_text = "\n".join(
+            f"Step {s.get('step_id', '?')}: {s.get('description', '')} → {s.get('result', '')}"
+            for s in steps if isinstance(s, dict)
+        )
+
+    ctx_str = _json.dumps(ctx, ensure_ascii=False, indent=2) if ctx else "(无)"
+
+    user_prompt = format_prompt(
+        ADAPTIVE_VERIFIER_USER,
+        problem=problem,
+        candidate_solution=candidate_text,
+        presolve_context=ctx_str,
+    )
+
+    messages = verifier.build_messages(
+        system_prompt=ADAPTIVE_VERIFIER_SYSTEM,
+        user_prompt=user_prompt,
+    )
+
+    try:
+        response = await verifier.call_llm(messages)
+        result = verifier.extract_json(response)
+
+        if result is None:
+            return verifier._build_default_result("Adaptive verification failed to parse")
+
+        verified = result.get("overall_valid", False)
+        confidence = result.get("confidence", 0.0)
+        critical_errors = result.get("critical_errors", [])
+
+        return {
+            "verified": verified,
+            "confidence": max(0.0, min(1.0, float(confidence))),
+            "overall_score": confidence if verified else max(0.0, confidence - 0.3),
+            "details": {
+                "step_labels": result.get("steps", []),
+                "critical_errors": critical_errors,
+            },
+            "issues_found": critical_errors,
+            "suggestions": [result.get("repair_hint", "Review critical errors")],
+        }
+    except Exception as e:
+        logger.error("Adaptive verifier error: %s", e)
+        return verifier._build_default_result(str(e))

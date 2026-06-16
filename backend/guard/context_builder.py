@@ -10,6 +10,7 @@ from .complexity import estimate_risk
 from .type_matcher import hybrid_classify
 from .precompute import local_precompute
 from .router import CalibratedRouter
+from .retriever import retrieve_similar
 
 
 _router = CalibratedRouter()
@@ -48,12 +49,27 @@ def build_presolve_context(raw_problem: str) -> dict[str, Any]:
     )
     precompute = local_precompute(constraint_graph, classification)
 
+    # Retrieval (limited by evidence budget)
+    similar_cases = retrieve_similar(raw_problem, route="standard", top_k=5)
+    retrieval_score = 0.5 if similar_cases else 0.0
+
+    # Calculate tool_success from precompute results
+    tool_success = 0.0
+    if precompute.get("symbolic_candidates"):
+        tool_success = 1.0
+    elif precompute.get("numeric_sanity", {}).get("has_target"):
+        tool_success = 0.5
+
     fusion = _router.predict({
         "type_confidence": classification.get("confidence", 0.0),
         "complexity_score": risk.get("complexity_score", 0.0),
-        "retrieval_score": 0.0,
-        "tool_success": 0.0,
+        "retrieval_score": retrieval_score,
+        "tool_success": tool_success,
     })
+
+    # Re-retrieve with budget for the selected route
+    route = fusion.get("route", "standard")
+    similar_cases = retrieve_similar(raw_problem, route=route, top_k=5)
 
     return {
         "problem_id": str(uuid.uuid4()),
@@ -62,7 +78,10 @@ def build_presolve_context(raw_problem: str) -> dict[str, Any]:
         "constraint_graph": constraint_graph,
         "risk": risk,
         "classification": classification,
-        "retrieval": None,
+        "retrieval": {
+            "similar_cases": similar_cases,
+            "method_templates": [],
+        },
         "precompute": precompute,
         "fusion": fusion,
     }

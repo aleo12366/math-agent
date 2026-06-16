@@ -110,11 +110,12 @@ class TestSimpleRoute:
         from pipeline.routes.simple import route_simple
 
         mock_solver = AsyncMock()
-        mock_solver.run = AsyncMock(return_value={
+        mock_solver.run_freeform = AsyncMock(return_value={
             "final_answer": "4",
             "final_answer_latex": "4",
             "reasoning_steps": [{"step_id": 1, "description": "test", "mathematical_expression": "2+2", "result": "4"}],
             "answer_format": "number",
+            "raw_response": "2+2=4",
         })
 
         mock_formatter = MagicMock()
@@ -136,7 +137,7 @@ class TestSimpleRoute:
             all_outputs=all_outputs,
         )
 
-        mock_solver.run.assert_called_once()
+        mock_solver.run_freeform.assert_called_once()
         assert "solving" in result
         assert result["solving"]["final_answer"] == "4"
 
@@ -145,10 +146,11 @@ class TestSimpleRoute:
         from pipeline.routes.simple import route_simple
 
         mock_solver = AsyncMock()
-        mock_solver.run = AsyncMock(return_value={
+        mock_solver.run_freeform = AsyncMock(return_value={
             "final_answer": "5",
             "reasoning_steps": [],
             "answer_format": "number",
+            "raw_response": "2+3=5",
         })
 
         mock_emit = AsyncMock()

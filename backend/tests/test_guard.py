@@ -659,10 +659,12 @@ class TestBuildPresolveContext:
         ctx = build_presolve_context("计算 2 + 3")
         assert ctx["fusion"]["route"] in ("simple", "standard", "complex", "safe_fallback")
 
-    def test_retrieval_is_none(self):
+    def test_retrieval_has_similar_cases(self):
         from guard.context_builder import build_presolve_context
         ctx = build_presolve_context("计算 2 + 3")
-        assert ctx["retrieval"] is None
+        assert ctx["retrieval"] is not None
+        assert "similar_cases" in ctx["retrieval"]
+        assert "method_templates" in ctx["retrieval"]
 
     def test_unique_problem_ids(self):
         from guard.context_builder import build_presolve_context

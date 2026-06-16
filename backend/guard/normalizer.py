@@ -159,7 +159,21 @@ def extract_variables(text: str, latex_blocks: list[str]) -> list[str]:
 
 
 def extract_unknowns(text: str, variables: list[str]) -> list[str]:
-    return [v for v in variables if re.search(rf"\b{v}\b", text)]
+    """Extract unknowns: variables the problem asks to solve for."""
+    # Look for explicit "求x" / "solve for x" patterns
+    unknown_markers = re.findall(r"求\s*([a-zA-Z])", text)
+    unknown_markers += re.findall(r"solve\s+for\s+([a-zA-Z])", text, re.IGNORECASE)
+    if unknown_markers:
+        return sorted(set(unknown_markers))
+    # Fallback: variables that appear after "求" or in question context
+    question_vars = re.findall(r"求\s*(.+?)(?:的|，|,|$)", text)
+    found = []
+    for v in variables:
+        for q in question_vars:
+            if v in q:
+                found.append(v)
+                break
+    return sorted(set(found)) if found else variables[:1]  # default: first variable
 
 
 def extract_knowns(text: str) -> list[str]:
