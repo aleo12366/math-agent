@@ -2,8 +2,14 @@
 Math Agent - Challenge Cup Competition Entry Point
 
 This module provides the ReasoningAgent class required by the competition platform.
-It wraps the multi-agent pipeline (10 agents, verification, retry) using the
-platform-provided client for LLM calls.
+It wraps the adaptive multi-agent pipeline using the platform-provided client
+for LLM calls.
+
+Pipeline: Pre-LLM Guard Layer (zero-LLM, <100ms) → Route Selection
+  - simple:       1 LLM call  (~15-30s)
+  - standard:     3 LLM calls (~45-90s)
+  - complex:      6 LLM calls (~2-3min, parallel solvers + consensus)
+  - safe_fallback: high-verification multi-path
 """
 
 import sys
@@ -26,8 +32,7 @@ except ImportError:
 
 from agents.base import BaseAgent
 from config.settings import Settings
-from pipeline.single import SinglePipeline
-from pipeline.multi import MultiPipeline
+from pipeline.adaptive import AdaptivePipeline
 
 
 logger = logging.getLogger(__name__)
@@ -63,15 +68,11 @@ class ClientAdapter:
 class ReasoningAgent:
     """Math reasoning agent for the Challenge Cup competition.
 
-    Uses a multi-agent pipeline with 10 specialized agents:
-    - Problem Understanding, Classification, Knowledge Locating
-    - Planning, Solving (with SymPy/SciPy tool calls)
-    - 6-Dimension Verification, Reflection/Retry
-    - Educational Explanation, Formatting
-
-    Pipeline modes:
-    - "single": Linear single-agent flow
-    - "multi_debate": N parallel solvers with consensus voting
+    Uses an adaptive pipeline with Pre-LLM Guard Layer:
+    - Guard Layer (zero-LLM, <100ms): normalization, constraint extraction,
+      complexity scoring, type matching, retrieval, precompute, routing
+    - Four routes: simple (1 LLM), standard (3 LLM), complex (6 LLM), safe_fallback
+    - Dual-channel: solver uses freeform reasoning, verifier uses step-level JSON
     """
 
     def __init__(self, client, *args, **kwargs):
@@ -87,16 +88,17 @@ class ReasoningAgent:
         # Inject the adapter so all BaseAgent subclasses use the competition client
         BaseAgent._shared_llm = self.adapter
 
-        # Configure settings
+        # Configure settings for adaptive pipeline
         self.config = Settings(
             temperature=0.3,
             max_tokens=4096,
-            pipeline_mode="single",
+            pipeline_mode="multi_debate",
+            debate_agents=3,
             max_retries=2,
             log_level="WARNING",
         )
 
-        logger.info("ReasoningAgent initialized with competition client")
+        logger.info("ReasoningAgent initialized with adaptive pipeline")
 
     @staticmethod
     def _run_async(coro):
@@ -176,7 +178,7 @@ class ReasoningAgent:
             }
 
     async def _solve_async(self, problem: str, trace: list) -> dict:
-        """Run the pipeline asynchronously and extract the final response.
+        """Run the adaptive pipeline asynchronously and extract the final response.
 
         Args:
             problem: Math problem text.
@@ -185,8 +187,8 @@ class ReasoningAgent:
         Returns:
             Dict with final_response, confidence, and other metadata.
         """
-        # Create pipeline (single mode for stability)
-        pipeline = SinglePipeline(config=self.config)
+        # Create adaptive pipeline (Guard Layer + 4 routes)
+        pipeline = AdaptivePipeline(config=self.config)
 
         # Run the full pipeline
         output = await pipeline.solve(problem)
@@ -203,6 +205,13 @@ class ReasoningAgent:
             "step": "verify",
             "content": f"status={output.verification_status.value}, "
                        f"confidence={output.confidence}",
+        })
+
+        # Route info
+        route = output.metadata.get("mode", "adaptive") if output.metadata else "adaptive"
+        trace.append({
+            "step": "route",
+            "content": f"adaptive pipeline, mode={route}",
         })
 
         return {
