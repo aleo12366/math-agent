@@ -1,5 +1,6 @@
 """Tool Agent - wraps SymPy/SciPy calls for use by other agents."""
 
+import asyncio
 import logging
 from typing import Optional
 from config.schemas import ToolResult
@@ -62,8 +63,6 @@ class ToolAgent:
         Returns:
             ToolResult with the computation result.
         """
-        import asyncio
-
         if tool_name not in TOOL_REGISTRY:
             self.logger.warning("Unknown tool: %s", tool_name)
             return ToolResult(value=f"Unknown tool: {tool_name}")
@@ -104,21 +103,93 @@ class ToolAgent:
         Returns:
             Enriched steps list with tool_result fields filled in.
         """
-        enriched = []
-        for step in steps:
-            tool_used = step.get("tool_used")
-            if tool_used and tool_used in TOOL_REGISTRY:
-                # Extract tool params from the step
-                params = self._extract_tool_params(step)
-                if params:
-                    result = await self.execute(tool_used, params)
-                    step["tool_result"] = {
-                        "value": result.value,
-                        "numeric": result.numeric,
-                        "latex": result.latex,
-                    }
-            enriched.append(step)
-        return enriched
+        return await self.execute_parallel(steps)
+
+    async def execute_parallel(self, reasoning_steps: list[dict]) -> list[dict]:
+        """Execute tool calls in parallel, grouped by dependency.
+
+        Groups tool calls into dependency batches and executes each batch
+        concurrently using asyncio.gather.
+
+        Args:
+            reasoning_steps: List of reasoning step dicts from the solver.
+
+        Returns:
+            Enriched steps list with tool_result fields filled in.
+        """
+        tool_calls = [
+            (i, step)
+            for i, step in enumerate(reasoning_steps)
+            if step.get("tool_used") and step.get("tool_used") in TOOL_REGISTRY
+        ]
+
+        if not tool_calls:
+            return list(reasoning_steps)
+
+        groups = self._build_dependency_groups(tool_calls)
+
+        for group in groups:
+            tasks = [self._execute_single_tool(step) for _, step in group]
+            results = await asyncio.gather(*tasks)
+            for (idx, _), result in zip(group, results):
+                reasoning_steps[idx]["tool_result"] = {
+                    "value": result.value,
+                    "numeric": result.numeric,
+                    "latex": result.latex,
+                }
+
+        return reasoning_steps
+
+    def _build_dependency_groups(
+        self, tool_calls: list[tuple[int, dict]]
+    ) -> list[list[tuple[int, dict]]]:
+        """Group tool calls by dependency for parallel execution.
+
+        Uses a simple heuristic: all independent calls go into one group
+        (fully parallel). Steps that reference a prior step's result are
+        placed in a subsequent group.
+
+        Args:
+            tool_calls: List of (index, step) tuples with tool calls.
+
+        Returns:
+            List of groups, each group is a list of (index, step) tuples.
+            Groups are executed sequentially; calls within a group run concurrently.
+        """
+        independent = []
+        dependent = []
+        seen_outputs = set()
+
+        for item in tool_calls:
+            idx, step = item
+            expr = step.get("mathematical_expression", "")
+            if any(ref in expr for ref in seen_outputs):
+                dependent.append(item)
+            else:
+                independent.append(item)
+                seen_outputs.add(f"step_{idx}")
+
+        groups = []
+        if independent:
+            groups.append(independent)
+        if dependent:
+            groups.append(dependent)
+        return groups
+
+    async def _execute_single_tool(self, step: dict) -> ToolResult:
+        """Execute a single tool call from a reasoning step.
+
+        Args:
+            step: A reasoning step dict containing tool_used and params.
+
+        Returns:
+            ToolResult from the tool execution.
+        """
+        tool_used = step["tool_used"]
+        params = self._extract_tool_params(step)
+        if params:
+            return await self.execute(tool_used, params)
+        return ToolResult(value=f"No params for tool: {tool_used}")
 
     def _extract_tool_params(self, step: dict) -> Optional[dict]:
         """Extract tool parameters from a reasoning step.
