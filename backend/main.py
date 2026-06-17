@@ -29,8 +29,6 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Math Agent System v2.0.0")
     logger.info("Model: %s", settings.model_name)
     logger.info("API URL: %s", settings.api_url)
-    logger.info("Pipeline mode: %s", settings.pipeline_mode)
-
     # Ensure log directory exists
     if settings.log_file:
         log_dir = Path(settings.log_file).parent

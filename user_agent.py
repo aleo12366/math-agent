@@ -92,7 +92,6 @@ class ReasoningAgent:
         self.config = Settings(
             temperature=0.3,
             max_tokens=4096,
-            pipeline_mode="multi_debate",
             debate_agents=3,
             max_retries=2,
             log_level="WARNING",
@@ -208,7 +207,7 @@ class ReasoningAgent:
         })
 
         # Route info
-        route = output.metadata.get("mode", "adaptive") if output.metadata else "adaptive"
+        route = output.metadata.mode.value if output.metadata else "adaptive"
         trace.append({
             "step": "route",
             "content": f"adaptive pipeline, mode={route}",
