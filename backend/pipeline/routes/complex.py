@@ -7,9 +7,8 @@ import logging
 from typing import Any
 
 from pipeline.canonicalizer import canonicalize_answer
-from pipeline.routes._common import run_adaptive_verifier, run_adaptive_reflection
+from pipeline.routes._common import run_adaptive_verifier, run_adaptive_reflection, build_explanation
 from config.prompts import CONSENSUS_SYSTEM, CONSENSUS_USER, format_prompt
-from utils.llm_client import llm_client
 from utils.json_parser import extract_json_from_text
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ async def route_complex(
     base_context = {
         "problem": problem,
         "cleaned_problem": normalized.get("clean_text", problem),
-        "domain": classification.get("domain", "微积分"),
+        "domain": classification.get("domain", "未知"),
         "presolve_context": ctx,
     }
 
@@ -103,7 +102,7 @@ async def route_complex(
 
     # Stage: Consensus
     await emit_stage("consensus", "started", 75)
-    consensus = await _run_consensus(problem, valid_results, n_candidates)
+    consensus = await _run_consensus(problem, valid_results, n_candidates, solver.llm)
     all_outputs["consensus"] = consensus
 
     selected_agent = consensus.get("selected_agent", 0)
@@ -165,7 +164,7 @@ async def route_complex(
         await emit_stage("solving", "complete", 50)
 
         await emit_stage("consensus", "started", 75)
-        consensus = await _run_consensus(problem, valid_results, n_candidates)
+        consensus = await _run_consensus(problem, valid_results, n_candidates, solver.llm)
         all_outputs["consensus"] = consensus
         selected_agent = consensus.get("selected_agent", 0)
         best_solution = next(
@@ -190,10 +189,13 @@ async def route_complex(
         all_outputs["verification"] = verification
         await emit_stage("verification", "complete", 72)
 
+    # Build educational explanation from best solution
+    all_outputs["explanation"] = build_explanation(best_solution, classification)
+
     return all_outputs
 
 
-async def _run_consensus(problem: str, solver_results: list[dict], n_agents: int) -> dict:
+async def _run_consensus(problem: str, solver_results: list[dict], n_agents: int, llm: Any) -> dict:
     """Run consensus voting across solver results."""
     agent_solutions = ""
     for i, result in enumerate(solver_results):
@@ -218,7 +220,7 @@ async def _run_consensus(problem: str, solver_results: list[dict], n_agents: int
     ]
 
     try:
-        response = await llm_client.chat(messages, temperature=0.3, max_tokens=4096)
+        response = await llm.chat(messages, temperature=0.3, max_tokens=4096)
         result = extract_json_from_text(response)
 
         if result is None:
