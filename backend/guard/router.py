@@ -127,7 +127,7 @@ class CalibratedRouter:
             flags.append("precompute_failure")
 
         # signal_conflict is a composite: any severe disagreement
-        if "method_conflict" in flags or "classification_conflict" in flags:
+        if any(f in flags for f in ("method_conflict", "classification_conflict", "precompute_failure")):
             flags.append("signal_conflict")
 
         return flags

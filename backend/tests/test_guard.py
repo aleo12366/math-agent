@@ -581,8 +581,8 @@ class TestCalibratedRouter:
         }
         result = router.predict(features)
         assert "precompute_failure" in result["conflict_flags"]
-        assert "signal_conflict" not in result["conflict_flags"]
-        assert result["route"] == "simple"
+        assert "signal_conflict" in result["conflict_flags"]
+        assert result["route"] == "safe_fallback"
 
     def test_confidence_blending(self):
         router = self._make_router()
