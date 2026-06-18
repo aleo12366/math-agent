@@ -85,8 +85,8 @@ class Solver(BaseAgent):
         final_answer = None
         final_answer_latex = None
 
-        # Try boxed LaTeX
-        boxed = re.search(r"\\boxed\{(.+?)\}", response)
+        # Try boxed LaTeX (handle nested braces like \boxed{\dfrac{1}{3}})
+        boxed = re.search(r"\\boxed\{((?:[^{}]|\{[^{}]*\})+)\}", response)
         if boxed:
             final_answer_latex = boxed.group(1)
             final_answer = final_answer_latex
