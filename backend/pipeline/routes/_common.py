@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json as _json
 import logging
+import re
 from typing import Any
 
 from config.prompts import (
@@ -214,6 +215,23 @@ async def run_adaptive_reflection(
         }
 
 
+def _wrap_bare_latex(text: str) -> str:
+    """Wrap bare LaTeX expressions in $$...$$ for remark-math detection.
+
+    Only wraps if:
+    - Text contains LaTeX commands (\\cmd pattern)
+    - Text does NOT already contain $ delimiters (to avoid conflicts)
+    - Text is short enough to be a standalone expression (< 120 chars)
+    """
+    if not text or len(text) > 120:
+        return text
+    if "$" in text:
+        return text
+    if re.search(r"\\[a-zA-Z]+", text):
+        return f"$$ {text} $$"
+    return text
+
+
 def build_explanation(solving: dict, classification: dict) -> dict:
     """Build an educational explanation from solver output.
 
@@ -247,12 +265,12 @@ def build_explanation(solving: dict, classification: dict) -> dict:
         if expr:
             parts.append(f"$$ {expr} $$")
         if result:
-            parts.append(f"\u2192 {result}")
+            parts.append(f"\u2192 {_wrap_bare_latex(result)}")
 
     explanation = "\n\n".join(parts) if parts else ""
 
     if not explanation:
-        explanation = f"\u6700\u7ec8\u7b54\u6848\uff1a{final_answer}"
+        explanation = f"\u6700\u7ec8\u7b54\u6848\uff1a{_wrap_bare_latex(final_answer)}"
         if final_answer_latex:
             explanation += f"\n\n$$ {final_answer_latex} $$"
 
