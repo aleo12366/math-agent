@@ -220,12 +220,12 @@ def _wrap_bare_latex(text: str) -> str:
 
     Only wraps if:
     - Text contains LaTeX commands (\\cmd pattern)
-    - Text does NOT already contain $ delimiters (to avoid conflicts)
+    - Text does NOT already contain any math delimiters ($, \\(, \\), \\[, \\])
     - Text is short enough to be a standalone expression (< 120 chars)
     """
     if not text or len(text) > 120:
         return text
-    if "$" in text:
+    if "$" in text or "\\(" in text or "\\)" in text or "\\[" in text or "\\]" in text:
         return text
     if re.search(r"\\[a-zA-Z]+", text):
         return f"$$ {text} $$"
@@ -264,7 +264,8 @@ def build_explanation(solving: dict, classification: dict) -> dict:
             parts.append(f"**Step {step_id}**: {desc}")
         if expr:
             parts.append(f"$$ {expr} $$")
-        if result:
+        # Only add result if it's not already contained in the description
+        if result and (not desc or result.strip() not in desc):
             parts.append(f"\u2192 {_wrap_bare_latex(result)}")
 
     explanation = "\n\n".join(parts) if parts else ""
