@@ -1,13 +1,13 @@
 # Math Agent System v3.0
 
-基于 Intern-S1 的自适应多智能体数学推理系统。通过 Pre-LLM Guard Layer 实现问题自动分级，按复杂度选择最优求解路径。
+基于 Intern-S 的自适应多智能体数学推理系统。通过 Pre-LLM Guard Layer 实现问题自动分级，按复杂度选择最优求解路径。
 
 ## 架构
 
 ```
 数学问题
   ↓
-Pre-LLM Guard Layer（本地 <100ms，零 LLM 调用）
+Pre-LLM Guard Layer
   ├─ 文本规范化 + 约束图抽取
   ├─ 复杂度评估 + 风险路由
   ├─ 题型匹配（规则 + 模板 + 模糊检索）
@@ -63,16 +63,11 @@ npm install
 npm run dev
 ```
 
-访问 http://localhost:5173 使用。
-
 ### 4. Docker 部署（可选）
 
 ```bash
 docker-compose up --build
 ```
-
-- 前端: http://localhost:3000
-- 后端: http://localhost:8000
 
 ## 项目结构
 
@@ -155,7 +150,7 @@ python -m pytest tests/ -v
 
 - **后端**: Python 3.11+ / FastAPI / SymPy / SciPy / rapidfuzz
 - **前端**: React 18 / TypeScript / Vite / Zustand / Tailwind CSS / KaTeX
-- **LLM**: Intern-S1（兼容 OpenAI 格式）
+- **LLM**: Intern-S系列（兼容 OpenAI 格式）
 
 ## License
 
