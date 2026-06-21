@@ -5,7 +5,7 @@ import { useConfigStore } from '../store/configStore';
 import type { MathAgentOutput } from '../types';
 
 const MAX_RETRIES = 2;
-const SOLVE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const SOLVE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes (complex route with retries)
 
 /**
  * Hook for SSE streaming solve with automatic retry, timeout, and store updates.

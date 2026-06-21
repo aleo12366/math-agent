@@ -129,7 +129,7 @@ async def run_adaptive_verifier(
     )
 
     try:
-        response = await verifier.call_llm(messages)
+        response = await verifier.call_llm(messages, max_tokens=8192)
         result = verifier.extract_json(response)
 
         if result is None:
@@ -189,7 +189,7 @@ async def run_adaptive_reflection(
     )
 
     try:
-        response = await reflection.call_llm(messages)
+        response = await reflection.call_llm(messages, max_tokens=8192)
         result = reflection.extract_json(response)
 
         if result is None:

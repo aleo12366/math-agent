@@ -220,7 +220,7 @@ async def _run_consensus(problem: str, solver_results: list[dict], n_agents: int
     ]
 
     try:
-        response = await llm.chat(messages, temperature=0.3, max_tokens=4096)
+        response = await llm.chat(messages, temperature=0.3, max_tokens=8192)
         result = extract_json_from_text(response)
 
         if result is None:
