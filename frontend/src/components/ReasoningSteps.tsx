@@ -1,7 +1,11 @@
 import { ArrowRight, Wrench } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import type { KeyStep, PlanStep } from '../types';
 import LatexRenderer from './LatexRenderer';
-import { normalizeDelimiters } from '../utils/latexCleaner';
+import { normalizeDelimiters, stripDelimiters } from '../utils/latexCleaner';
 
 interface ReasoningStepsProps {
   steps: KeyStep[];
@@ -22,7 +26,11 @@ export default function ReasoningSteps({ steps, plan }: ReasoningStepsProps) {
                   {step.step_id}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{step.description}</p>
+                  <div className="text-sm font-medium text-gray-800 markdown-content prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                      {normalizeDelimiters(step.description)}
+                    </ReactMarkdown>
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">方法: {step.method}</p>
                   {step.tools_needed && step.tools_needed.length > 0 && (
                     <div className="flex gap-1 mt-1">
@@ -54,22 +62,34 @@ export default function ReasoningSteps({ steps, plan }: ReasoningStepsProps) {
                 }`}>
                   {step.step_id}
                 </span>
-                <p className="text-sm font-medium text-gray-800">{step.description}</p>
+                <div className="text-sm font-medium text-gray-800 markdown-content prose prose-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                    {normalizeDelimiters(step.description)}
+                  </ReactMarkdown>
+                </div>
               </div>
 
               {step.mathematical_expression && (
                 <div className="ml-8 my-2 p-3 bg-gray-50 rounded-lg">
-                  <LatexRenderer latex={normalizeDelimiters(step.mathematical_expression)} displayMode />
+                  <LatexRenderer latex={stripDelimiters(normalizeDelimiters(step.mathematical_expression))} displayMode />
                 </div>
               )}
 
-              <div className="ml-8 flex items-center gap-2 text-sm">
-                <ArrowRight className="w-3 h-3 text-gray-400" />
-                <span className="text-gray-700 font-medium">{step.result}</span>
+              <div className="ml-8 flex items-start gap-2 text-sm">
+                <ArrowRight className="w-3 h-3 text-gray-400 mt-1 flex-shrink-0" />
+                <div className="text-gray-700 font-medium markdown-content prose prose-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                    {normalizeDelimiters(step.result)}
+                  </ReactMarkdown>
+                </div>
               </div>
 
               {step.justification && (
-                <p className="ml-8 mt-1 text-xs text-gray-500 italic">{step.justification}</p>
+                <div className="ml-8 mt-1 text-xs text-gray-500 italic markdown-content prose prose-xs max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                    {normalizeDelimiters(step.justification)}
+                  </ReactMarkdown>
+                </div>
               )}
 
               {step.tool_used && (

@@ -60,11 +60,11 @@ class Formatter:
         start_time = all_outputs.get("_start_time", datetime.now())
 
         # Parse domain
-        domain_str = classification.get("domain", "微积分")
+        domain_str = classification.get("domain", "未知")
         try:
             domain = Domain(domain_str)
         except ValueError:
-            domain = Domain.CALCULUS
+            domain = Domain.UNKNOWN
 
         # Parse problem type
         ptype_str = classification.get("problem_type", "计算题")

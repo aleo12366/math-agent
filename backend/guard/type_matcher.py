@@ -15,8 +15,8 @@ except ImportError:
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "data" / "templates"
 
 DOMAIN_KEYWORDS: dict[str, list[str]] = {
-    "代数": ["方程", "求解方程", "equation", "solve", "代数", "algebra", "不等式", "inequality",
-             "因式分解", "factor", "多项式", "polynomial"],
+    "代数": ["方程", "求解", "求解方程", "计算", "化简", "equation", "solve", "代数", "algebra",
+             "不等式", "inequality", "因式分解", "factor", "多项式", "polynomial"],
     "微积分": ["积分", "integral", "导数", "derivative", "极限", "limit", "微积分", "calculus",
               "微分", "differentiate", "求导", "∫", "∑", "级数", "series"],
     "偏微分方程": ["偏微分方程", "PDE", "pde", "热方程", "heat equation", "波动方程", "wave equation",
@@ -43,6 +43,7 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
     "微分方程": ["常微分方程", "ODE", "ode", "微分方程", "differential equation",
                "初值问题", "initial value", "边值问题", "boundary value"],
     "优化": ["最优化", "optimization", "拉格朗日", "lagrange", "极值", "extremum",
+            "最大", "最小", "最值", "最大值", "最小值",
             "约束", "constraint", "目标函数", "objective"],
     "数值分析": ["数值", "numerical", "近似", "approximate", "迭代", "iteration",
                "误差", "error", "收敛", "convergence"],

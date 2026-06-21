@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pipeline.routes._common import run_adaptive_verifier
+from pipeline.routes._common import run_adaptive_verifier, build_explanation
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ async def route_standard(
     base_context = {
         "problem": problem,
         "cleaned_problem": normalized.get("clean_text", problem),
-        "domain": classification.get("domain", "微积分"),
+        "domain": classification.get("domain", "未知"),
         "presolve_context": ctx,
     }
 
@@ -63,5 +63,8 @@ async def route_standard(
     )
     all_outputs["verification"] = verification
     await emit_stage("verification", "complete", 90)
+
+    # Build educational explanation from solver output
+    all_outputs["explanation"] = build_explanation(solving, classification)
 
     return all_outputs

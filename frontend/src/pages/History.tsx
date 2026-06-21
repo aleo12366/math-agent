@@ -1,15 +1,22 @@
 import { Clock, Trash2, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import { useSolveStore } from '../store/solveStore';
 import { DomainBadge, ProblemTypeBadge, VerificationBadge } from '../components/DomainBadge';
+import { normalizeDelimiters } from '../utils/latexCleaner';
 import type { MathAgentOutput } from '../types';
 
 export default function HistoryPage() {
   const { history, setResult, clearHistory, reset } = useSolveStore();
+  const navigate = useNavigate();
 
   const handleSelect = (item: MathAgentOutput) => {
     reset();
     setResult(item);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate('/');
   };
 
   return (
@@ -45,9 +52,11 @@ export default function HistoryPage() {
                     <ProblemTypeBadge type={item.problem_type} />
                     <VerificationBadge status={item.verification_status} />
                   </div>
-                  <p className="text-sm text-gray-800 font-medium truncate">
-                    {item.final_answer}
-                  </p>
+                  <div className="text-sm text-gray-800 font-medium truncate markdown-content prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                      {normalizeDelimiters(item.final_answer)}
+                    </ReactMarkdown>
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">
                     置信度: {(item.confidence * 100).toFixed(0)}% ·
                     耗时: {(item.processing_time_ms / 1000).toFixed(1)}s ·

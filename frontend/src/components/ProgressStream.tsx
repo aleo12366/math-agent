@@ -47,7 +47,14 @@ export default function ProgressStream() {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+      <div
+        className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`求解进度: ${progress}% - ${label}`}
+      >
         <div
           className={`h-full rounded-full transition-all duration-500 ease-out ${
             isError ? 'bg-red-500' : isComplete ? 'bg-green-500' : 'bg-primary-500 progress-bar-animate'

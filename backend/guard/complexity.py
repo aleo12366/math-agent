@@ -14,6 +14,8 @@ _SCORE_MAP: dict[str, float] = {
     "no_constraints": 0.10,
     "uncertain_answer_shape": 0.10,
     "advanced_topic": 0.15,
+    "series_form": 0.15,
+    "optimization": 0.10,
 }
 
 _ADVANCED_KEYWORDS = {
@@ -91,6 +93,17 @@ def estimate_risk(norm: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]
     if any(kw in lower or kw in text for kw in _ADVANCED_KEYWORDS):
         score += _SCORE_MAP["advanced_topic"]
         risk_tags.append("advanced_topic")
+
+    # series_form: 级数问题
+    if "级数" in text or "series" in lower or "∑" in text:
+        score += _SCORE_MAP["series_form"]
+        risk_tags.append("series_form")
+
+    # optimization: 最优化问题
+    if any(kw in text for kw in ("最大", "最小", "极值", "最值")) or \
+       any(kw in lower for kw in ("max", "min", "optimize", "extremum")):
+        score += _SCORE_MAP["optimization"]
+        risk_tags.append("optimization")
 
     complexity_score = min(score, 1.0)
 

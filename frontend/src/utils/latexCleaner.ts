@@ -16,6 +16,25 @@ export function cleanLatex(text: string): string {
 }
 
 /**
+ * Strip outer $ delimiters for direct KaTeX rendering.
+ * LatexRenderer passes content to katex.render() which expects raw LaTeX,
+ * NOT $-wrapped math expressions.
+ */
+export function stripDelimiters(text: string | undefined): string {
+  if (!text) return '';
+  let s = text.trim();
+  // Strip $$ ... $$ (display math)
+  if (s.startsWith('$$') && s.endsWith('$$') && s.length > 4) {
+    s = s.slice(2, -2).trim();
+  }
+  // Strip $ ... $ (inline math)
+  if (s.startsWith('$') && s.endsWith('$') && s.length > 2) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+/**
  * Normalize delimiters: \[ \] → $$, \( \) → $
  */
 export function normalizeDelimiters(text: string | undefined): string {

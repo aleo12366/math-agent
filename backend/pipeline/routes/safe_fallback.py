@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from pipeline.canonicalizer import answers_match
-from pipeline.routes._common import run_adaptive_verifier
+from pipeline.routes._common import run_adaptive_verifier, build_explanation
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ async def route_safe_fallback(
     base_context = {
         "problem": problem,
         "cleaned_problem": normalized.get("clean_text", problem),
-        "domain": classification.get("domain", "微积分"),
+        "domain": classification.get("domain", "未知"),
         "presolve_context": ctx,
     }
 
@@ -140,6 +140,9 @@ async def route_safe_fallback(
 
     all_outputs["uncertainty_flags"] = uncertainty_flags
     all_outputs["all_solutions"] = valid_results
+
+    # Build educational explanation from best solution
+    all_outputs["explanation"] = build_explanation(best_solution, classification)
 
     if uncertainty_flags:
         all_outputs["_pipeline_notes"] = (

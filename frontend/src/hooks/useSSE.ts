@@ -4,11 +4,16 @@ import { useSolveStore } from '../store/solveStore';
 import { useConfigStore } from '../store/configStore';
 import type { MathAgentOutput } from '../types';
 
+const MAX_RETRIES = 2;
+const SOLVE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
- * Hook for SSE streaming solve with automatic store updates.
+ * Hook for SSE streaming solve with automatic retry, timeout, and store updates.
  */
 export function useSSE() {
   const abortRef = useRef<AbortController | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef = useRef(0);
   const {
     setProblem,
     setIsSolving,
@@ -21,7 +26,16 @@ export function useSSE() {
   } = useSolveStore();
   const { mode, debateAgents } = useConfigStore();
 
-  const solve = useCallback(
+  const cleanup = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, []);
+
+  const startSolve = useCallback(
     (problem: string) => {
       // Reset state
       reset();
@@ -29,6 +43,13 @@ export function useSSE() {
       setIsSolving(true);
       setCurrentStage('starting');
       setError(null);
+
+      // Set up timeout
+      timeoutRef.current = setTimeout(() => {
+        abortRef.current?.abort();
+        setIsSolving(false);
+        setError('求解超时，请检查网络连接后重试');
+      }, SOLVE_TIMEOUT_MS);
 
       abortRef.current = solveProblemSSE(problem, mode, debateAgents, {
         onStage: (event) => {
@@ -48,15 +69,31 @@ export function useSSE() {
           }
         },
         onResult: (result: MathAgentOutput) => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
           setResult(result);
           addToHistory(result);
           setIsSolving(false);
           setCurrentStage('complete');
-          setError(null); // Clear any error from onComplete
+          setError(null);
+          retryCountRef.current = 0;
         },
         onError: (error: string) => {
-          setError(error);
-          setIsSolving(false);
+          // Retry on transient errors
+          if (retryCountRef.current < MAX_RETRIES && !error.includes('AbortError')) {
+            retryCountRef.current += 1;
+            console.warn(`SSE error, retrying (${retryCountRef.current}/${MAX_RETRIES})...`);
+            setTimeout(() => startSolve(problem), 1000 * retryCountRef.current);
+          } else {
+            if (timeoutRef.current) {
+              clearTimeout(timeoutRef.current);
+              timeoutRef.current = null;
+            }
+            setIsSolving(false);
+            setError(error || '连接中断，请重试');
+          }
         },
       });
     },
@@ -64,17 +101,20 @@ export function useSSE() {
   );
 
   const cancel = useCallback(() => {
-    abortRef.current?.abort();
+    cleanup();
     setIsSolving(false);
-    setCurrentStage('cancelled');
-  }, [setIsSolving, setCurrentStage]);
+    setCurrentStage('');
+    setError(null);
+    setProgress(0);
+    retryCountRef.current = 0;
+  }, [cleanup, setIsSolving, setCurrentStage, setError, setProgress]);
 
-  // Cleanup: abort on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      abortRef.current?.abort();
+      cleanup();
     };
-  }, []);
+  }, [cleanup]);
 
-  return { solve, cancel };
+  return { solve: startSolve, cancel };
 }

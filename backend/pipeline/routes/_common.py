@@ -243,8 +243,10 @@ def build_explanation(solving: dict, classification: dict) -> dict:
     final_answer_latex = solving.get("final_answer_latex", "")
     domain = classification.get("domain", "")
 
-    # Build from reasoning steps, skipping raw-text descriptions (>200 chars
-    # without markdown structure are likely raw LLM output with broken LaTeX)
+    # Build from reasoning steps, keeping only structured content:
+    # - Short descriptions (≤200 chars) as step labels
+    # - Mathematical expressions wrapped in $$ for remarkMath
+    # - Result only when it differs from the expression
     steps = solving.get("reasoning_steps", [])
     parts = []
     for s in steps:
@@ -256,17 +258,30 @@ def build_explanation(solving: dict, classification: dict) -> dict:
         result = s.get("result", "")
         step_id = s.get("step_id", "?")
 
-        # Skip raw-text descriptions (too long, no markdown headings/lists)
-        if len(desc) > 200 and not any(c in desc[:200] for c in ("#", "-", "*", "**")):
+        # Skip raw-text descriptions: >200 chars means full LLM output,
+        # not a structured step label (always skip, no markdown exception)
+        if len(desc) > 200:
             desc = ""
 
         if desc:
             parts.append(f"**Step {step_id}**: {desc}")
+
+        # Strip existing $ delimiters before wrapping in $$ to avoid nesting
         if expr:
+            expr = expr.strip().strip("$").strip()
             parts.append(f"$$ {expr} $$")
-        # Only add result if it's not already contained in the description
-        if result and (not desc or result.strip() not in desc):
-            parts.append(f"\u2192 {_wrap_bare_latex(result)}")
+
+        # Only add result if it differs from the expression
+        if result:
+            result_clean = result.strip().strip("$").strip()
+            if not result_clean:
+                pass  # skip empty result
+            else:
+                expr_clean = expr.strip() if expr else ""
+                if not desc and expr_clean and result_clean == expr_clean:
+                    continue  # result duplicates the expression, skip
+                if not desc or result_clean not in desc:
+                    parts.append(f"\u2192 {_wrap_bare_latex(result)}")
 
     explanation = "\n\n".join(parts) if parts else ""
 

@@ -3,6 +3,7 @@ import { Calculator, History, Settings, Zap } from 'lucide-react';
 import Home from './pages/Home';
 import HistoryPage from './pages/History';
 import SettingsPage from './pages/Settings';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   return (
@@ -22,11 +23,11 @@ function App() {
                 </div>
               </div>
 
-              <nav className="flex items-center gap-1">
+              <nav className="flex items-center gap-1 overflow-x-auto">
                 <NavLink
                   to="/"
                   className={({ isActive }) =>
-                    `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    `flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive
                         ? 'bg-primary-50 text-primary-700'
                         : 'text-gray-600 hover:bg-gray-100'
@@ -34,12 +35,12 @@ function App() {
                   }
                 >
                   <Calculator className="w-4 h-4" />
-                  求解
+                  <span className="hidden sm:inline">求解</span>
                 </NavLink>
                 <NavLink
                   to="/history"
                   className={({ isActive }) =>
-                    `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    `flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive
                         ? 'bg-primary-50 text-primary-700'
                         : 'text-gray-600 hover:bg-gray-100'
@@ -47,12 +48,12 @@ function App() {
                   }
                 >
                   <History className="w-4 h-4" />
-                  历史
+                  <span className="hidden sm:inline">历史</span>
                 </NavLink>
                 <NavLink
                   to="/settings"
                   className={({ isActive }) =>
-                    `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    `flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive
                         ? 'bg-primary-50 text-primary-700'
                         : 'text-gray-600 hover:bg-gray-100'
@@ -60,7 +61,7 @@ function App() {
                   }
                 >
                   <Settings className="w-4 h-4" />
-                  设置
+                  <span className="hidden sm:inline">设置</span>
                 </NavLink>
               </nav>
             </div>
@@ -69,11 +70,13 @@ function App() {
 
         {/* Main content */}
         <main className="flex-1">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<ErrorBoundary><Home /></ErrorBoundary>} />
+              <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
+              <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+            </Routes>
+          </ErrorBoundary>
         </main>
 
         {/* Footer */}

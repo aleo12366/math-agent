@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, HelpCircle, Clock, Cpu } from 'lucide-react';
+import { CheckCircle, XCircle, HelpCircle, Clock, Cpu, Copy, Download, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import type { MathAgentOutput } from '../types';
 import { DomainBadge, ProblemTypeBadge, DifficultyBadge, VerificationBadge } from './DomainBadge';
 import ConfidenceMeter from './ConfidenceMeter';
@@ -8,7 +12,7 @@ import VerificationPanel from './VerificationPanel';
 import ExplanationPanel from './ExplanationPanel';
 import JsonViewer from './JsonViewer';
 import LatexRenderer from './LatexRenderer';
-import { normalizeDelimiters } from '../utils/latexCleaner';
+import { normalizeDelimiters, stripDelimiters } from '../utils/latexCleaner';
 
 interface SolutionDisplayProps {
   result: MathAgentOutput;
@@ -18,6 +22,7 @@ type Tab = 'answer' | 'steps' | 'explanation' | 'verification' | 'json';
 
 export default function SolutionDisplay({ result }: SolutionDisplayProps) {
   const [activeTab, setActiveTab] = useState<Tab>('answer');
+  const [copied, setCopied] = useState(false);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'answer', label: '答案' },
@@ -26,6 +31,26 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
     { key: 'verification', label: '验证' },
     { key: 'json', label: 'JSON' },
   ];
+
+  const handleCopy = () => {
+    const text = result.final_answer_latex
+      ? `${result.final_answer}\nLaTeX: ${result.final_answer_latex}`
+      : result.final_answer;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `result-${result.problem_id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4 animate-slide-in">
@@ -43,7 +68,16 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
               ID: {result.problem_id} · v{result.pipeline_version}
             </p>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <button onClick={handleCopy} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors" title="复制答案">
+                {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              <button onClick={handleExport} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors" title="导出 JSON">
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {(result.processing_time_ms / 1000).toFixed(1)}s
@@ -53,6 +87,7 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
               {result.token_usage_estimate?.total || 0} tokens
             </span>
           </div>
+          </div>
         </div>
 
         <ConfidenceMeter confidence={result.confidence} />
@@ -60,10 +95,17 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
         {/* Final answer */}
         <div className="mt-4 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">最终答案</h3>
-          <p className="text-lg font-semibold text-gray-900">{result.final_answer}</p>
+          <div className="text-lg font-semibold text-gray-900 markdown-content prose prose-sm max-w-none">
+            <ReactMarkdown
+              remarkPlugins={[remarkMath, remarkGfm]}
+              rehypePlugins={[rehypeKatex]}
+            >
+              {normalizeDelimiters(result.final_answer)}
+            </ReactMarkdown>
+          </div>
           {result.final_answer_latex && (
             <div className="mt-2">
-              <LatexRenderer latex={normalizeDelimiters(result.final_answer_latex)} displayMode />
+              <LatexRenderer latex={stripDelimiters(normalizeDelimiters(result.final_answer_latex))} displayMode />
             </div>
           )}
         </div>
@@ -102,10 +144,18 @@ export default function SolutionDisplay({ result }: SolutionDisplayProps) {
         {/* Tab content */}
         {activeTab === 'answer' && (
           <div>
-            <p className="text-gray-800 text-lg mb-4">{result.final_answer}</p>
-            {result.final_answer_latex && (
-              <div className="p-4 bg-gray-50 rounded-lg text-center">
-              <LatexRenderer latex={normalizeDelimiters(result.final_answer_latex)} displayMode />
+            {result.final_answer_latex ? (
+              <div className="p-4 bg-gray-50 rounded-lg text-center mb-4">
+                <LatexRenderer latex={stripDelimiters(normalizeDelimiters(result.final_answer_latex))} displayMode />
+              </div>
+            ) : (
+              <div className="text-gray-800 text-lg mb-4 p-4 bg-gray-50 rounded-lg markdown-content prose prose-sm max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath, remarkGfm]}
+                  rehypePlugins={[rehypeKatex]}
+                >
+                  {normalizeDelimiters(result.final_answer)}
+                </ReactMarkdown>
               </div>
             )}
             {result.alternative_methods?.length > 0 && (

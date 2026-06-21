@@ -1,6 +1,11 @@
 import { CheckCircle, XCircle, HelpCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import type { VerificationDetails, VerificationStatus } from '../types';
 import ConfidenceMeter from './ConfidenceMeter';
+import { normalizeDelimiters } from '../utils/latexCleaner';
 
 interface VerificationPanelProps {
   details: VerificationDetails;
@@ -18,6 +23,15 @@ const CHECK_LABELS: Record<string, string> = {
 };
 
 export default function VerificationPanel({ details, status, confidence }: VerificationPanelProps) {
+  if (!details) {
+    return (
+      <div className="space-y-4">
+        <ConfidenceMeter confidence={confidence} className="mb-4" />
+        <p className="text-gray-500 text-sm">暂无验证详情</p>
+      </div>
+    );
+  }
+
   const checks = Object.entries(details);
 
   return (
@@ -47,7 +61,11 @@ export default function VerificationPanel({ details, status, confidence }: Verif
                 {(check.score * 100).toFixed(0)}%
               </span>
             </div>
-            <p className="text-xs text-gray-600">{check.detail}</p>
+            <div className="text-xs text-gray-600 markdown-content prose prose-xs max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                {normalizeDelimiters(check.detail)}
+              </ReactMarkdown>
+            </div>
             <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
               <div
                 className={`h-1.5 rounded-full ${check.passed ? 'bg-green-500' : 'bg-red-500'}`}

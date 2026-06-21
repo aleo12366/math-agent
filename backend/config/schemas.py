@@ -11,12 +11,14 @@ from datetime import datetime
 
 
 class Domain(str, Enum):
+    ALGEBRA = "代数"
     CALCULUS = "微积分"
     LINEAR_ALGEBRA = "线性代数"
-    PROBABILITY = "概率论"
+    PROBABILITY = "概率统计"
     PDE = "偏微分方程"
+    ODE = "微分方程"
     COMPLEX_ANALYSIS = "复分析"
-    TOPOLOGY = "拓扑学"
+    TOPOLOGY = "拓扑"
     OPERATIONS_RESEARCH = "运筹学"
     NUMBER_THEORY = "数论"
     COMBINATORICS = "组合数学"
@@ -26,9 +28,12 @@ class Domain(str, Enum):
     FUNCTIONAL_ANALYSIS = "泛函分析"
     NUMERICAL_ANALYSIS = "数值分析"
     DISCRETE_MATH = "离散数学"
-    OPTIMIZATION = "最优化理论"
+    OPTIMIZATION = "优化"
+    GEOMETRY = "几何"
+    MATHEMATICAL_PHYSICS = "数学物理"
     INFORMATION_THEORY = "信息论"
     STOCHASTIC_PROCESS = "随机过程"
+    UNKNOWN = "未知"
 
 
 class ProblemType(str, Enum):
